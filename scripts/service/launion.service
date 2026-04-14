@@ -1,0 +1,28 @@
+[Unit]
+Description=LaUnion — Sistema de Costeo para Carpintería
+Documentation=https://github.com/<usuario>/launion-app
+After=network.target
+
+[Service]
+Type=simple
+User=launion
+WorkingDirectory=/opt/launion-app/.next/standalone
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+
+# Variables de entorno
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=0.0.0.0
+EnvironmentFile=/opt/launion-app/.env
+
+# Límites de recursos
+LimitNOFILE=65536
+
+# Seguridad
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

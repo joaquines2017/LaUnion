@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Proveedores ────────────────────────────────────────────────────────────
+
+model Proveedor {
+  id            String            @id @default(uuid())
+  nombre        String
+  cuit          String?
+  telefono      String?
+  email         String?
+  direccion     String?
+  observaciones String?
+  estado        String            @default("activo") // activo | inactivo
+  createdAt     DateTime          @default(now())
+  precios       PrecioProveedor[]
+
+  @@map("proveedores")
+}
+
+// ─── Insumos ─────────────────────────────────────────────────────────────────
+
+model CategoriaInsumo {
+  id          String   @id @default(uuid())
+  nombre      String   @unique
+  descripcion String?
+  insumos     Insumo[]
+
+  @@map("categorias_insumo")
+}
+
+model Insumo {
+  id           String   @id @default(uuid())
+  codigo       String   @unique
+  descripcion  String
+  categoriaId  String
+  unidadMedida String   @default("unidad") // unidad | metro | metroLineal | kilo | par | juego | rollo | placa
+  espesormm    Float?   // espesor en mm (para placas)
+  altoM        Float?   // alto estándar de placa en metros
+  anchoM       Float?   // ancho estándar de placa en metros
+  precioBase   Decimal? @db.Decimal(12, 2) // precio fijo para gastos sin proveedor
+  estado       String   @default("activo")
+  createdAt    DateTime @default(now())
+
+  categoria          CategoriaInsumo    @relation(fields: [categoriaId], references: [id])
+  precios            PrecioProveedor[]
+  despieceMateriales DespieceMaterial[]
+  despieceInsumos    DespieceInsumo[]
+
+  @@map("insumos")
+}
+
+model PrecioProveedor {
+  id            String   @id @default(uuid())
+  proveedorId   String
+  insumoId      String
+  precio        Decimal  @db.Decimal(12, 2)
+  fechaVigencia DateTime @default(now())
+  estado        String   @default("vigente") // vigente | no_vigente
+  creadoEn      DateTime @default(now())
+  usuarioId     String?
+
+  proveedor Proveedor         @relation(fields: [proveedorId], references: [id])
+  insumo    Insumo            @relation(fields: [insumoId], references: [id])
+  historico HistorialPrecio[]
+
+  @@unique([proveedorId, insumoId])
+  @@map("precios_proveedor")
+}
+
+model HistorialPrecio {
+  id                String   @id @default(uuid())
+  precioProveedorId String
+  precioAnterior    Decimal  @db.Decimal(12, 2)
+  precioNuevo       Decimal  @db.Decimal(12, 2)
+  fechaCambio       DateTime @default(now())
+  usuarioId         String
+
+  precioProveedor PrecioProveedor @relation(fields: [precioProveedorId], references: [id])
+
+  @@map("historial_precios")
+}
+
+// ─── Muebles ─────────────────────────────────────────────────────────────────
+
+model CategoriaMueble {
+  id      String   @id @default(uuid())
+  nombre  String   @unique
+  muebles Mueble[]
+
+  @@map("categorias_mueble")
+}
+
+model Mueble {
+  id          String   @id @default(uuid())
+  codigo      String   @unique // carga manual obligatoria, ej: "05-147-000"
+  nombre      String
+  categoriaId String
+  costoActual Decimal  @db.Decimal(12, 2) @default(0)
+  estado      String   @default("activo")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categoria  CategoriaMueble    @relation(fields: [categoriaId], references: [id])
+  materiales DespieceMaterial[]
+  insumos    DespieceInsumo[]
+  versiones  VersionDespiece[]
+  imagenes   MuebleImagen[]
+
+  @@map("muebles")
+}
+
+model MuebleImagen {
+  id        String   @id @default(uuid())
+  muebleId  String
+  filename  String
+  url       String   // ruta pública, ej: /uploads/muebles/<id>/<filename>
+  orden     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  mueble Mueble @relation(fields: [muebleId], references: [id], onDelete: Cascade)
+
+  @@map("mueble_imagenes")
+}
+
+// Pestaña "Despiece" — materiales principales (melamina, MDF, vidrio, etc.)
+model DespieceMaterial {
+  id             String   @id @default(uuid())
+  muebleId       String
+  insumoId       String?  // null si el usuario escribió texto libre
+  proveedorId    String?  // null = usar precio de referencia (mínimo)
+  productoNombre String
+  medidas        String?  // ej: "90x43", "100x45", "1,50 m"
+  cantidad       Decimal  @db.Decimal(10, 4)
+  costoUnitario  Decimal  @db.Decimal(12, 2)
+  costoTotal     Decimal  @db.Decimal(12, 2)
+  orden          Int      @default(0)
+
+  mueble Mueble  @relation(fields: [muebleId], references: [id], onDelete: Cascade)
+  insumo Insumo? @relation(fields: [insumoId], references: [id])
+
+  @@map("despiece_materiales")
+}
+
+// Pestaña "Insumos" — insumos varios y gastos (tornillos, flete, etc.)
+model DespieceInsumo {
+  id            String   @id @default(uuid())
+  muebleId      String
+  insumoId      String?  // null si el usuario escribió texto libre
+  descripcion   String
+  cantidad      Decimal  @db.Decimal(10, 4)
+  costoUnitario Decimal  @db.Decimal(12, 2)
+  costoTotal    Decimal  @db.Decimal(12, 2)
+  orden         Int      @default(0)
+
+  mueble Mueble  @relation(fields: [muebleId], references: [id], onDelete: Cascade)
+  insumo Insumo? @relation(fields: [insumoId], references: [id])
+
+  @@map("despiece_insumos")
+}
+
+model VersionDespiece {
+  id                 String   @id @default(uuid())
+  muebleId           String
+  numeroVersion      Int
+  fecha              DateTime @default(now())
+  usuarioId          String
+  motivo             String?
+  snapshotMateriales Json     // snapshot completo de DespieceMaterial[]
+  snapshotInsumos    Json     // snapshot completo de DespieceInsumo[]
+
+  mueble Mueble @relation(fields: [muebleId], references: [id])
+
+  @@map("versiones_despiece")
+}
+
+// ─── Usuarios y Seguridad ────────────────────────────────────────────────────
+
+model Usuario {
+  id            String   @id @default(uuid())
+  nombreUsuario String   @unique
+  email         String   @unique
+  passwordHash  String   // bcrypt hash
+  rol           String   @default("operador") // administrador | operador | lectura
+  estado        String   @default("activo")
+  createdAt     DateTime @default(now())
+
+  @@map("usuarios")
+}
+
+// ─── Catálogos ───────────────────────────────────────────────────────────────
+
+model UnidadMedida {
+  id          String  @id @default(uuid())
+  nombre      String  @unique // "unidad", "metro", "placa", etc.
+  descripcion String?
+
+  @@map("unidades_medida")
+}
+
+// ─── Configuración y Auditoría ───────────────────────────────────────────────
+
+model ConfiguracionGlobal {
+  id                 String @id @default("1") // singleton
+  factorDesperdicio  Float  @default(1.10)    // 1.10 = 10% desperdicio por defecto
+  moneda             String @default("ARS")
+  vigenciaPrecioDias Int    @default(30)
+
+  @@map("configuracion_global")
+}
+
+model LogAuditoria {
+  id              String   @id @default(uuid())
+  fechaHora       DateTime @default(now())
+  usuarioId       String
+  accion          String   // PRECIO_MODIFICADO | DESPIECE_MODIFICADO | RECALCULO_CASCADA | etc.
+  entidad         String   // Mueble | Insumo | PrecioProveedor | etc.
+  entidadId       String
+  datosAnteriores Json?
+  datosNuevos     Json?
+
+  @@map("log_auditoria")
+}

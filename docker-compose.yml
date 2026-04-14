@@ -1,0 +1,62 @@
+services:
+  # ── Base de datos PostgreSQL ────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: launion_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: launion
+      POSTGRES_USER: launion
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-launion_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"   # exponer solo en red local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U launion -d launion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Migración + Seed (se ejecuta una vez y termina) ─────────────────────────
+  migrate:
+    image: node:20-alpine
+    container_name: launion_migrate
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://launion:${DB_PASSWORD:-launion_dev}@db:5432/launion
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: >
+      sh -c "
+        npm ci --quiet &&
+        npx prisma migrate deploy &&
+        npx prisma db seed
+      "
+    restart: "no"
+
+  # ── Aplicación Next.js ──────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: launion_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://launion:${DB_PASSWORD:-launion_dev}@db:5432/launion
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+    driver: local
