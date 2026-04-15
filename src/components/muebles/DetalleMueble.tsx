@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FormMueble } from "./FormMueble";
 import { TabDespiece, crearFilaMaterial, type FilaMaterial } from "./TabDespiece";
 import { TabInsumos, crearFilaInsumo, type FilaInsumo } from "./TabInsumos";
-import { formatearPrecio } from "@/lib/formato";
+import { formatearPrecio, formatearNumeroInput, parsearNumero } from "@/lib/formato";
 import { toast } from "sonner";
 import type { InsumoOpcion } from "./AutocompletarInsumo";
 
@@ -114,7 +114,7 @@ function dbAFilaInsumo(i: InsumoLineaDB): FilaInsumo {
     insumo,
     descripcion: i.descripcion,
     cantidad: cantidadDisplay,
-    costoUnitario: String(i.costoUnitario),
+    costoUnitario: formatearNumeroInput(Number(i.costoUnitario)),
     modoCalculo: esPlaca ? "placa" : "unitario",
   });
   fila.costoTotal = Number(i.costoTotal);
@@ -175,7 +175,7 @@ export function DetalleMueble({
             insumoId: f.insumo?.id ?? null,
             descripcion: f.descripcion,
             cantidad: Math.max(cant, 0),
-            costoUnitario: parseFloat(f.costoUnitario) || 0,
+            costoUnitario: parsearNumero(f.costoUnitario),
             costoTotal: f.costoTotal,
             orden: i,
           };

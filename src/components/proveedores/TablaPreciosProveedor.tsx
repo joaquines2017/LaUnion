@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { formatearPrecio, formatearFecha } from "@/lib/formato";
+import { formatearPrecio, formatearFecha, formatearNumeroInput, parsearNumero } from "@/lib/formato";
 import { ModalRecalculo } from "@/components/precios/ModalRecalculo";
 import type { ResultadoCascada } from "@/lib/recalculo-cascada";
 
@@ -131,7 +131,7 @@ export function TablaPreciosProveedor({
   }
 
   async function guardarEdicion(fila: PrecioProveedorFila) {
-    const nuevo = parseFloat(editValor.replace(",", "."));
+    const nuevo = parsearNumero(editValor);
     if (isNaN(nuevo) || nuevo <= 0) { toast.error("Precio inválido"); return; }
     setGuardando(true);
     await llamarApiPrecios(fila.insumoId, nuevo, Number(fila.precio), fila.insumo.descripcion);
@@ -141,7 +141,7 @@ export function TablaPreciosProveedor({
 
   async function agregarNuevoPrecio() {
     if (!nuevoInsumoId || !nuevoPrecio) return;
-    const precio = parseFloat(nuevoPrecio.replace(",", "."));
+    const precio = parsearNumero(nuevoPrecio);
     if (isNaN(precio) || precio <= 0) { toast.error("Precio inválido"); return; }
     setGuardando(true);
     const insumo = insumosDisponibles.find((i) => i.id === nuevoInsumoId);
@@ -203,8 +203,8 @@ export function TablaPreciosProveedor({
               <div className="space-y-1 w-36">
                 <label className="text-xs font-medium text-muted-foreground">Precio (ARS) *</label>
                 <Input
-                  type="number" min="0" step="0.01"
-                  placeholder="Ej: 78000"
+                  inputMode="decimal"
+                  placeholder="Ej: 78.000,50"
                   value={nuevoPrecio}
                   onChange={(e) => setNuevoPrecio(e.target.value)}
                   className="h-8 text-sm"
@@ -282,7 +282,7 @@ export function TablaPreciosProveedor({
                     <td className="text-right">
                       {enEdicion ? (
                         <Input
-                          type="number" min="0" step="0.01"
+                          inputMode="decimal"
                           value={editValor}
                           onChange={(e) => setEditValor(e.target.value)}
                           className="h-7 w-32 text-right text-sm ml-auto"
@@ -320,7 +320,7 @@ export function TablaPreciosProveedor({
                       ) : (
                         <Button size="sm" variant="ghost"
                           className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
-                          onClick={() => { setEditId(fila.id); setEditValor(Number(fila.precio).toFixed(2)); }}>
+                          onClick={() => { setEditId(fila.id); setEditValor(formatearNumeroInput(Number(fila.precio))); }}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                       )}

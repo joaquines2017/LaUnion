@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { formatearPrecio, formatearFecha } from "@/lib/formato";
+import { formatearPrecio, formatearFecha, parsearNumero } from "@/lib/formato";
 import { Plus, CheckCircle, AlertTriangle, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ModalRecalculo } from "@/components/precios/ModalRecalculo";
@@ -77,7 +77,7 @@ export function TablaPrecios({
     if (!proveedorId || !precio) return;
     setLoading(true);
 
-    const nuevoPrecio = parseFloat(precio.replace(",", "."));
+    const nuevoPrecio = parsearNumero(precio);
     const provConPrecio = precios.find((p) => p.proveedor.id === proveedorId);
     const anterior = provConPrecio ? Number(provConPrecio.precio) : null;
 
@@ -189,10 +189,8 @@ export function TablaPrecios({
               <Input
                 value={precio}
                 onChange={(e) => setPrecio(e.target.value)}
-                placeholder="Ej: 78000"
-                type="number"
-                min="0"
-                step="0.01"
+                placeholder="Ej: 78.000,50"
+                inputMode="decimal"
               />
             </div>
             <Button

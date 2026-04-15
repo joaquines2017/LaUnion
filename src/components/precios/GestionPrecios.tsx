@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { formatearPrecio, formatearFecha } from "@/lib/formato";
+import { formatearPrecio, formatearFecha, formatearNumeroInput, parsearNumero } from "@/lib/formato";
 import { ModalRecalculo } from "@/components/precios/ModalRecalculo";
 import type { ResultadoCascada } from "@/lib/recalculo-cascada";
 
@@ -88,11 +88,11 @@ export function GestionPrecios({
 
   function iniciarEdicion(fila: PrecioFila) {
     setEditId(fila.id);
-    setEditValor(Number(fila.precio).toFixed(2));
+    setEditValor(formatearNumeroInput(Number(fila.precio)));
   }
 
   async function guardarPrecio(fila: PrecioFila) {
-    const nuevo = parseFloat(editValor.replace(",", "."));
+    const nuevo = parsearNumero(editValor);
     if (isNaN(nuevo) || nuevo <= 0) { toast.error("Precio inválido"); return; }
     setGuardando(true);
 
@@ -206,12 +206,10 @@ export function GestionPrecios({
                     <td className="text-right">
                       {enEdicion ? (
                         <Input
-                          type="number"
+                          inputMode="decimal"
                           value={editValor}
                           onChange={(e) => setEditValor(e.target.value)}
                           className="h-7 w-32 text-right text-sm ml-auto"
-                          min="0"
-                          step="0.01"
                           autoFocus
                           onKeyDown={(e) => { if (e.key === "Enter") guardarPrecio(fila); if (e.key === "Escape") setEditId(null); }}
                         />

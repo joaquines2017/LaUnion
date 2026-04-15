@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { ModalRecalculo } from "@/components/precios/ModalRecalculo";
 import type { ResultadoCascada } from "@/lib/recalculo-cascada";
+import { formatearNumeroInput, parsearNumero } from "@/lib/formato";
 
 const UNIDADES = [
   { value: "unidad", label: "Unidad" },
@@ -56,7 +57,7 @@ export function FormInsumo({
   const [loading, setLoading] = useState(false);
   const [unidad, setUnidad] = useState(insumo?.unidadMedida ?? "unidad");
   const [categoriaId, setCategoriaId] = useState(insumo?.categoriaId ?? "");
-  const [precioBase, setPrecioBase] = useState(insumo?.precioBase != null ? String(insumo.precioBase) : "");
+  const [precioBase, setPrecioBase] = useState(insumo?.precioBase != null ? formatearNumeroInput(insumo.precioBase) : "");
 
   // Modal recálculo cascada
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -91,7 +92,7 @@ export function FormInsumo({
       if (!isNaN(ancho)) data.anchoM = ancho;
     }
 
-    const precioBaseVal = parseFloat(precioBase.replace(",", "."));
+    const precioBaseVal = parsearNumero(precioBase);
     if (!isNaN(precioBaseVal) && precioBaseVal > 0) {
       data.precioBase = precioBaseVal;
     } else if (insumo && precioBase === "") {
@@ -114,7 +115,7 @@ export function FormInsumo({
 
       const c = data?.cascada;
       if (c?.lineasActualizadas > 0) {
-        const precioBaseVal = parseFloat(precioBase.replace(",", "."));
+        const precioBaseVal = parsearNumero(precioBase);
         setPrecioAnteriorModal(insumo?.precioBase ?? null);
         setPrecioNuevoModal(isNaN(precioBaseVal) ? 0 : precioBaseVal);
         setCascada(c);
@@ -251,12 +252,10 @@ export function FormInsumo({
               <Label htmlFor="precioBase">Precio base (ARS)</Label>
               <Input
                 id="precioBase"
-                type="number"
-                min="0"
-                step="0.01"
+                inputMode="decimal"
                 value={precioBase}
                 onChange={(e) => setPrecioBase(e.target.value)}
-                placeholder="Ej: 15000"
+                placeholder="Ej: 15.000,00"
                 className="max-w-xs"
               />
               <p className="text-xs text-muted-foreground">

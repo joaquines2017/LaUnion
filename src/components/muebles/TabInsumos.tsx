@@ -5,7 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AutocompletarInsumo, type InsumoOpcion } from "./AutocompletarInsumo";
-import { formatearPrecio } from "@/lib/formato";
+import { formatearPrecio, formatearNumeroInput, parsearNumero } from "@/lib/formato";
 
 export interface FilaInsumo {
   _key: string;
@@ -37,7 +37,7 @@ export function crearFilaInsumo(inicial?: Partial<FilaInsumo>): FilaInsumo {
 }
 
 function calcularTotal(fila: FilaInsumo): number {
-  const precio = parseFloat(fila.costoUnitario) || 0;
+  const precio = parsearNumero(fila.costoUnitario);
   const cant = parseFloat(fila.cantidad) || 0;
   if (fila.modoCalculo === "placa") {
     // cant es el porcentaje de uso (ej: 65.5), precio es el costo de la placa completa
@@ -69,7 +69,7 @@ export function TabInsumos({ filas, onChange }: Props) {
       insumo,
       descripcion: insumo?.descripcion ?? "",
       modoCalculo: esPlaca ? "placa" : "unitario",
-      costoUnitario: insumo?.precioRef != null ? String(insumo.precioRef) : "0",
+      costoUnitario: insumo?.precioRef != null ? formatearNumeroInput(insumo.precioRef) : "0",
       // Resetear cantidad al cambiar insumo
       cantidad: esPlaca ? "0" : "1",
     });
@@ -156,9 +156,7 @@ export function TabInsumos({ filas, onChange }: Props) {
                 <td className="px-2 py-1.5">
                   <Input
                     className="h-8 text-sm font-mono text-right"
-                    type="number"
-                    min="0"
-                    step="1"
+                    inputMode="decimal"
                     value={fila.costoUnitario}
                     onChange={(e) =>
                       actualizarFila(fila._key, { costoUnitario: e.target.value })
