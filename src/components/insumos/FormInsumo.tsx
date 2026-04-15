@@ -109,19 +109,26 @@ export function FormInsumo({
     });
 
     if (res.ok) {
-      const data = await res.json();
-      toast.success(insumo ? "Insumo actualizado" : "Insumo creado");
+      const resData = await res.json();
       router.refresh();
 
-      const c = data?.cascada;
+      const c = resData?.cascada;
       if (c?.lineasActualizadas > 0) {
+        toast.success(
+          insumo
+            ? `Insumo actualizado — ${c.muebleAfectados} mueble${c.muebleAfectados !== 1 ? "s" : ""} recalculado${c.muebleAfectados !== 1 ? "s" : ""}`
+            : "Insumo creado"
+        );
         const precioBaseVal = parsearNumero(precioBase);
         setPrecioAnteriorModal(insumo?.precioBase ?? null);
         setPrecioNuevoModal(isNaN(precioBaseVal) ? 0 : precioBaseVal);
         setCascada(c);
         setModalAbierto(true);
       } else {
-        router.push("/insumos");
+        toast.success(insumo ? "Insumo actualizado" : "Insumo creado");
+        if (!insumo) {
+          router.push("/insumos");
+        }
       }
     } else {
       try {

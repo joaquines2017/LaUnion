@@ -53,33 +53,38 @@ export async function PATCH(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  // Leer precioBase actual antes de actualizar (para detectar cambio)
+  const actual = await prisma.insumo.findUnique({
+    where: { id },
+    select: { precioBase: true },
+  });
+
+  let insumo;
   try {
-    // Leer precioBase actual antes de actualizar (para detectar cambio)
-    const actual = await prisma.insumo.findUnique({
-      where: { id },
-      select: { precioBase: true },
-    });
-
-    const insumo = await prisma.insumo.update({ where: { id }, data: parsed.data });
-
-    // Si cambió el precioBase, recalcular costos en cascada
-    const precioBaseAnterior = actual?.precioBase != null ? Number(actual.precioBase) : null;
-    const precioBaseNuevo = parsed.data.precioBase !== undefined
-      ? (parsed.data.precioBase != null ? Number(parsed.data.precioBase) : null)
-      : precioBaseAnterior;
-
-    let cascada = null;
-    if (precioBaseNuevo != null && precioBaseNuevo !== precioBaseAnterior) {
-      const config = await prisma.configuracionGlobal.findUnique({ where: { id: "1" } });
-      const factorDesperdicio = config?.factorDesperdicio ?? 1.1;
-      cascada = await recalcularCascada(id, precioBaseNuevo, Number(factorDesperdicio));
-    }
-
-    return NextResponse.json({ insumo, cascada });
+    insumo = await prisma.insumo.update({ where: { id }, data: parsed.data });
   } catch (err) {
     console.error("Error al actualizar insumo:", err);
     return NextResponse.json({ error: "Error al guardar el insumo" }, { status: 500 });
   }
+
+  // Si cambió el precioBase, recalcular costos en cascada
+  const precioBaseAnterior = actual?.precioBase != null ? Number(actual.precioBase) : null;
+  const precioBaseNuevo = parsed.data.precioBase !== undefined
+    ? (parsed.data.precioBase != null ? Number(parsed.data.precioBase) : null)
+    : precioBaseAnterior;
+
+  let cascada = null;
+  if (precioBaseNuevo != null && precioBaseNuevo !== precioBaseAnterior) {
+    try {
+      const config = await prisma.configuracionGlobal.findUnique({ where: { id: "1" } });
+      const factorDesperdicio = config?.factorDesperdicio ?? 1.1;
+      cascada = await recalcularCascada(id, precioBaseNuevo, Number(factorDesperdicio));
+    } catch (err) {
+      console.error("Error en recálculo cascada:", err);
+    }
+  }
+
+  return NextResponse.json({ insumo, cascada });
 }
 
 export async function DELETE(
