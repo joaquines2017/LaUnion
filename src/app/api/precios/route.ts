@@ -51,33 +51,37 @@ export async function POST(req: NextRequest) {
 
   // Recálculo en cascada — solo si el precio modificado es el seleccionado
   // (o si no hay selección manual, se usa el mínimo vigente)
-  const [config, insumo] = await Promise.all([
-    prisma.configuracionGlobal.findUnique({ where: { id: "1" } }),
-    prisma.insumo.findUnique({ where: { id: insumoId }, select: { precioSeleccionadoId: true } }),
-  ]);
-  const factorDesperdicio = config?.factorDesperdicio ?? 1.1;
-
-  let precioParaCascada: number | null = null;
-
-  if (insumo?.precioSeleccionadoId) {
-    // Hay precio seleccionado manualmente → solo cascada si ES el que cambió
-    if (insumo.precioSeleccionadoId === result.id) {
-      precioParaCascada = precio;
-    }
-  } else {
-    // Sin selección manual → cascada con el mínimo vigente actual
-    const minVigente = await prisma.precioProveedor.findFirst({
-      where: { insumoId, estado: "vigente" },
-      orderBy: { precio: "asc" },
-    });
-    if (minVigente) {
-      precioParaCascada = Number(minVigente.precio);
-    }
-  }
-
   let cascada = null;
-  if (precioParaCascada !== null) {
-    cascada = await recalcularCascada(insumoId, precioParaCascada, Number(factorDesperdicio));
+  try {
+    const [config, insumo] = await Promise.all([
+      prisma.configuracionGlobal.findUnique({ where: { id: "1" } }),
+      prisma.insumo.findUnique({ where: { id: insumoId }, select: { precioSeleccionadoId: true } }),
+    ]);
+    const factorDesperdicio = config?.factorDesperdicio ?? 1.1;
+
+    let precioParaCascada: number | null = null;
+
+    if (insumo?.precioSeleccionadoId) {
+      // Hay precio seleccionado manualmente → solo cascada si ES el que cambió
+      if (insumo.precioSeleccionadoId === result.id) {
+        precioParaCascada = precio;
+      }
+    } else {
+      // Sin selección manual → cascada con el mínimo vigente actual
+      const minVigente = await prisma.precioProveedor.findFirst({
+        where: { insumoId, estado: "vigente" },
+        orderBy: { precio: "asc" },
+      });
+      if (minVigente) {
+        precioParaCascada = Number(minVigente.precio);
+      }
+    }
+
+    if (precioParaCascada !== null) {
+      cascada = await recalcularCascada(insumoId, precioParaCascada, Number(factorDesperdicio));
+    }
+  } catch (err) {
+    console.error("Error en recálculo cascada:", err);
   }
 
   return NextResponse.json(
