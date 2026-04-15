@@ -81,7 +81,7 @@ chmod 600 "$APP_DIR/.env"
 echo "[6/7] Instalando dependencias y construyendo la app..."
 cd "$APP_DIR"
 
-sudo -u "$APP_USER" npm ci --omit=dev
+sudo -u "$APP_USER" npm ci
 
 sudo -u "$APP_USER" npx prisma generate
 
