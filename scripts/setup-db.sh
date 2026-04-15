@@ -84,32 +84,17 @@ SELECT pg_terminate_backend(pid)
 FROM pg_stat_activity
 WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();
 
--- Dropear y recrear con encoding correcto
+-- Dropear y recrear con encoding UTF8 (locale C.UTF-8 funciona en cualquier sistema)
 DROP DATABASE IF EXISTS $DB_NAME;
 CREATE DATABASE $DB_NAME
   OWNER $DB_USER
   ENCODING 'UTF8'
-  LC_COLLATE 'es_AR.UTF-8'
-  LC_CTYPE 'es_AR.UTF-8'
+  LC_COLLATE 'C.UTF-8'
+  LC_CTYPE 'C.UTF-8'
   TEMPLATE template0;
 
 GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;
 SQL
-
-# Verificar que el locale es_AR.UTF-8 existe; si no, usar en_US.UTF-8
-if ! locale -a 2>/dev/null | grep -q "es_AR.UTF-8"; then
-  echo "  Locale es_AR.UTF-8 no disponible, usando en_US.UTF-8..."
-  sudo -u postgres psql <<SQL2
-DROP DATABASE IF EXISTS $DB_NAME;
-CREATE DATABASE $DB_NAME
-  OWNER $DB_USER
-  ENCODING 'UTF8'
-  LC_COLLATE 'en_US.UTF-8'
-  LC_CTYPE 'en_US.UTF-8'
-  TEMPLATE template0;
-GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;
-SQL2
-fi
 
 echo "  ✓ Base de datos '$DB_NAME' creada con encoding UTF-8"
 
