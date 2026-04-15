@@ -62,7 +62,7 @@ export function GestionPrecios({
       for (const [k, v] of Object.entries(cambios)) {
         if (v) params.set(k, v); else params.delete(k);
       }
-      params.delete("page");
+      if (!("page" in cambios)) params.delete("page");
       router.push(`${pathname}?${params.toString()}`);
     },
     [router, pathname, searchParams]
@@ -185,8 +185,8 @@ export function GestionPrecios({
                 <th>Insumo</th>
                 <th>Categoría</th>
                 <th>Proveedor</th>
-                <th className="text-right">Precio</th>
-                <th>Vigente desde</th>
+                <th className="!text-right w-48">Precio</th>
+                <th className="w-40">Vigente desde</th>
                 <th className="text-right">Acciones</th>
               </tr>
             </thead>
@@ -203,7 +203,7 @@ export function GestionPrecios({
                       <span className="na-badge na-badge-blue">{fila.insumo.categoria.nombre}</span>
                     </td>
                     <td className="text-sm">{fila.proveedor.nombre}</td>
-                    <td className="text-right">
+                    <td className="text-right w-48 whitespace-nowrap">
                       {enEdicion ? (
                         <Input
                           inputMode="decimal"

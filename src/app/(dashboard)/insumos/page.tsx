@@ -137,7 +137,12 @@ export default async function InsumosPage({
           </thead>
           <tbody className="divide-y divide-border">
             {insumos.map((i) => {
-              const precioMin = i.precios[0];
+              // Precio a mostrar: seleccionado manualmente → mínimo vigente → precioBase
+              const precioRef =
+                (i.precioSeleccionadoId
+                  ? i.precios.find((p) => p.id === i.precioSeleccionadoId)
+                  : undefined) ?? i.precios[0] ?? null;
+              const precioBaseNum = i.precioBase != null ? Number(i.precioBase) : null;
               return (
                 <tr
                   key={i.id}
@@ -160,8 +165,10 @@ export default async function InsumosPage({
                     {i.unidadMedida}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-foreground tabular-nums">
-                    {precioMin ? (
-                      formatearPrecio(Number(precioMin.precio))
+                    {precioRef ? (
+                      formatearPrecio(Number(precioRef.precio))
+                    ) : precioBaseNum != null ? (
+                      formatearPrecio(precioBaseNum)
                     ) : (
                       <span className="font-sans font-normal text-muted-foreground/60 text-xs">
                         Sin precio
@@ -169,7 +176,7 @@ export default async function InsumosPage({
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {precioMin?.proveedor.nombre ?? "—"}
+                    {precioRef?.proveedor?.nombre ?? (precioBaseNum != null ? "—" : "—")}
                   </td>
                   <td className="px-4 py-3">
                     <AccionesTabla
