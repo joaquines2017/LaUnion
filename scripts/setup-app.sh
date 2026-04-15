@@ -81,6 +81,10 @@ chmod 600 "$APP_DIR/.env"
 echo "[6/7] Instalando dependencias y construyendo la app..."
 cd "$APP_DIR"
 
+# Limpiar build anterior y asegurar que APP_USER sea dueño de todo
+rm -rf "$APP_DIR/.next"
+chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+
 sudo -u "$APP_USER" npm ci
 
 sudo -u "$APP_USER" npx prisma generate
