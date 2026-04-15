@@ -40,12 +40,26 @@ export async function GET(req: NextRequest) {
         where: { estado: "vigente" },
         orderBy: { precio: "asc" },
         include: { proveedor: { select: { nombre: true } } },
-        take: 1, // precio mínimo
       },
     },
   });
 
-  return NextResponse.json(insumos);
+  // Si el insumo tiene un precio seleccionado manualmente, devolverlo primero.
+  // Si no, el primero del array ya es el mínimo (orderBy asc).
+  const resultado = insumos.map((i) => {
+    if (i.precioSeleccionadoId) {
+      const seleccionado = i.precios.find(
+        (p) => p.id === i.precioSeleccionadoId && p.estado === "vigente"
+      );
+      if (seleccionado) {
+        const resto = i.precios.filter((p) => p.id !== seleccionado.id);
+        return { ...i, precios: [seleccionado, ...resto] };
+      }
+    }
+    return i;
+  });
+
+  return NextResponse.json(resultado);
 }
 
 export async function POST(req: NextRequest) {

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { formatearPrecio, formatearFecha } from "@/lib/formato";
-import { Plus, CheckCircle, AlertTriangle } from "lucide-react";
+import { Plus, CheckCircle, AlertTriangle, Star } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ModalRecalculo } from "@/components/precios/ModalRecalculo";
 import type { ResultadoCascada } from "@/lib/recalculo-cascada";
@@ -39,17 +39,23 @@ export function TablaPrecios({
   precios,
   proveedores,
   vigenciaDias,
+  precioSeleccionadoId: precioSeleccionadoIdInicial,
 }: {
   insumoId: string;
   insumoNombre?: string;
   precios: Precio[];
   proveedores: Proveedor[];
   vigenciaDias?: number;
+  precioSeleccionadoId?: string | null;
 }) {
   const router = useRouter();
   const [proveedorId, setProveedorId] = useState("");
   const [precio, setPrecio] = useState("");
   const [loading, setLoading] = useState(false);
+  const [seleccionandoId, setSeleccionandoId] = useState<string | null>(null);
+  const [precioSeleccionadoId, setPrecioSeleccionadoId] = useState<string | null>(
+    precioSeleccionadoIdInicial ?? null
+  );
 
   // Estado para el modal de recálculo
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -61,6 +67,11 @@ export function TablaPrecios({
   const precioMin = precios
     .filter((p) => p.estado === "vigente")
     .sort((a, b) => Number(a.precio) - Number(b.precio))[0];
+
+  // Precio actualmente en uso (seleccionado manual o mínimo)
+  const precioEnUso = precioSeleccionadoId
+    ? precios.find((p) => p.id === precioSeleccionadoId && p.estado === "vigente") ?? precioMin
+    : precioMin;
 
   async function handleAgregarPrecio() {
     if (!proveedorId || !precio) return;
@@ -101,6 +112,23 @@ export function TablaPrecios({
     setLoading(false);
   }
 
+  async function handleSeleccionarPrecio(precioId: string | null) {
+    setSeleccionandoId(precioId ?? "");
+    const res = await fetch(`/api/insumos/${insumoId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ precioSeleccionadoId: precioId }),
+    });
+    if (res.ok) {
+      setPrecioSeleccionadoId(precioId);
+      toast.success(precioId ? "Precio seleccionado como referencia" : "Selección eliminada — se usará el mínimo");
+      router.refresh();
+    } else {
+      toast.error("Error al guardar la selección");
+    }
+    setSeleccionandoId(null);
+  }
+
   const proveedoresConPrecio = new Set(precios.map((p) => p.proveedor.id));
 
   return (
@@ -108,13 +136,26 @@ export function TablaPrecios({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Precios por proveedor</CardTitle>
-          {precioMin && (
-            <span className="text-sm text-green-700 font-semibold flex items-center gap-1">
-              <CheckCircle className="h-3.5 w-3.5" />
-              Mejor precio: {formatearPrecio(Number(precioMin.precio))} —{" "}
-              {precioMin.proveedor.nombre}
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {precioSeleccionadoId && (
+              <button
+                onClick={() => handleSeleccionarPrecio(null)}
+                className="text-xs text-muted-foreground underline hover:text-foreground"
+              >
+                Usar mínimo automático
+              </button>
+            )}
+            {precioEnUso && (
+              <span className={`text-sm font-semibold flex items-center gap-1 ${precioSeleccionadoId ? "text-blue-700" : "text-green-700"}`}>
+                {precioSeleccionadoId
+                  ? <Star className="h-3.5 w-3.5" />
+                  : <CheckCircle className="h-3.5 w-3.5" />
+                }
+                {precioSeleccionadoId ? "Precio en uso" : "Mejor precio"}:{" "}
+                {formatearPrecio(Number(precioEnUso.precio))} — {precioEnUso.proveedor.nombre}
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Agregar / actualizar precio */}
@@ -181,53 +222,87 @@ export function TablaPrecios({
                   <th className="text-center py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Estado
                   </th>
+                  <th className="text-center py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Usar
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {precios
                   .sort((a, b) => Number(a.precio) - Number(b.precio))
-                  .map((p) => (
-                    <tr
-                      key={p.id}
-                      className={
-                        p.proveedor.id === precioMin?.proveedor.id
-                          ? "bg-emerald-50/60"
-                          : ""
-                      }
-                    >
-                      <td className="py-2.5 font-medium text-foreground">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {p.proveedor.nombre}
-                          {p.proveedor.id === precioMin?.proveedor.id && (
-                            <Badge className="text-xs bg-emerald-100 text-emerald-800 border-emerald-200">
-                              más barato
-                            </Badge>
+                  .map((p) => {
+                    const esSeleccionado = p.id === precioSeleccionadoId;
+                    const esMasBarato = p.proveedor.id === precioMin?.proveedor.id;
+                    return (
+                      <tr
+                        key={p.id}
+                        className={
+                          esSeleccionado
+                            ? "bg-blue-50/60"
+                            : !precioSeleccionadoId && esMasBarato
+                            ? "bg-emerald-50/60"
+                            : ""
+                        }
+                      >
+                        <td className="py-2.5 font-medium text-foreground">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {p.proveedor.nombre}
+                            {esSeleccionado && (
+                              <Badge className="text-xs bg-blue-100 text-blue-800 border-blue-200">
+                                seleccionado
+                              </Badge>
+                            )}
+                            {!precioSeleccionadoId && esMasBarato && (
+                              <Badge className="text-xs bg-emerald-100 text-emerald-800 border-emerald-200">
+                                más barato
+                              </Badge>
+                            )}
+                            {p.desactualizado && (
+                              <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                                <AlertTriangle className="h-3 w-3" />
+                                {vigenciaDias ? `+${vigenciaDias}d` : "desactualizado"}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2.5 text-right font-semibold font-mono tabular-nums">
+                          {formatearPrecio(Number(p.precio))}
+                        </td>
+                        <td className="py-2.5 text-muted-foreground text-xs">
+                          {formatearFecha(p.fechaVigencia)}
+                        </td>
+                        <td className="py-2.5 text-center">
+                          <Badge
+                            variant={
+                              p.estado === "vigente" ? "default" : "secondary"
+                            }
+                          >
+                            {p.estado}
+                          </Badge>
+                        </td>
+                        <td className="py-2.5 text-center">
+                          {p.estado === "vigente" && (
+                            esSeleccionado ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-medium">
+                                <Star className="h-3.5 w-3.5 fill-blue-600" />
+                                En uso
+                              </span>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                disabled={seleccionandoId !== null}
+                                onClick={() => handleSeleccionarPrecio(p.id)}
+                              >
+                                Usar
+                              </Button>
+                            )
                           )}
-                          {p.desactualizado && (
-                            <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                              <AlertTriangle className="h-3 w-3" />
-                              {vigenciaDias ? `+${vigenciaDias}d` : "desactualizado"}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-2.5 text-right font-semibold font-mono tabular-nums">
-                        {formatearPrecio(Number(p.precio))}
-                      </td>
-                      <td className="py-2.5 text-muted-foreground text-xs">
-                        {formatearFecha(p.fechaVigencia)}
-                      </td>
-                      <td className="py-2.5 text-center">
-                        <Badge
-                          variant={
-                            p.estado === "vigente" ? "default" : "secondary"
-                          }
-                        >
-                          {p.estado}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           ) : (

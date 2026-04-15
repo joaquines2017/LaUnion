@@ -48,10 +48,13 @@ model Insumo {
   estado       String   @default("activo")
   createdAt    DateTime @default(now())
 
-  categoria          CategoriaInsumo    @relation(fields: [categoriaId], references: [id])
-  precios            PrecioProveedor[]
-  despieceMateriales DespieceMaterial[]
-  despieceInsumos    DespieceInsumo[]
+  precioSeleccionadoId String?
+
+  categoria            CategoriaInsumo    @relation(fields: [categoriaId], references: [id])
+  precios              PrecioProveedor[]  @relation("InsumoPrecios")
+  precioSeleccionado   PrecioProveedor?   @relation("PrecioSeleccionado", fields: [precioSeleccionadoId], references: [id])
+  despieceMateriales   DespieceMaterial[]
+  despieceInsumos      DespieceInsumo[]
 
   @@map("insumos")
 }
@@ -66,9 +69,10 @@ model PrecioProveedor {
   creadoEn      DateTime @default(now())
   usuarioId     String?
 
-  proveedor Proveedor         @relation(fields: [proveedorId], references: [id])
-  insumo    Insumo            @relation(fields: [insumoId], references: [id])
-  historico HistorialPrecio[]
+  proveedor             Proveedor         @relation(fields: [proveedorId], references: [id])
+  insumo                Insumo            @relation("InsumoPrecios", fields: [insumoId], references: [id])
+  historico             HistorialPrecio[]
+  insumoQueLoSelecciona Insumo[]          @relation("PrecioSeleccionado")
 
   @@unique([proveedorId, insumoId])
   @@map("precios_proveedor")

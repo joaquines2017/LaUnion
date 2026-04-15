@@ -13,6 +13,7 @@ const updateSchema = z.object({
   anchoM: z.number().positive().nullable().optional(),
   precioBase: z.number().positive().nullable().optional(),
   estado: z.enum(["activo", "inactivo"]).optional(),
+  precioSeleccionadoId: z.string().uuid().nullable().optional(),
 });
 
 export async function GET(

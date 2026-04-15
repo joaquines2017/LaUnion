@@ -95,6 +95,7 @@ export default async function DetalleInsumoPage({
         precios={preciosConEstadoVigencia}
         proveedores={proveedores}
         vigenciaDias={vigenciaDias}
+        precioSeleccionadoId={insumo.precioSeleccionadoId ?? null}
       />
 
       {historial.length > 0 && (
