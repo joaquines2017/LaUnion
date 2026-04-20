@@ -16,6 +16,7 @@ import {
   Ruler,
   Layers,
   DollarSign,
+  Scissors,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,7 @@ const navItems: NavItem[] = [
   { href: "/insumos",     label: "Insumos",     icon: Package },
   { href: "/proveedores", label: "Proveedores", icon: Truck },
   { href: "/muebles",     label: "Muebles",     icon: Sofa },
+  { href: "/residuales",  label: "Residuales",  icon: Scissors },
   {
     href: "/reportes",
     label: "Reportes",

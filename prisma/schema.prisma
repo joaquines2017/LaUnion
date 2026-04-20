@@ -55,6 +55,7 @@ model Insumo {
   precioSeleccionado   PrecioProveedor?   @relation("PrecioSeleccionado", fields: [precioSeleccionadoId], references: [id])
   despieceMateriales   DespieceMaterial[]
   despieceInsumos      DespieceInsumo[]
+  materialesResiduales MaterialResidual[]
 
   @@map("insumos")
 }
@@ -206,6 +207,23 @@ model UnidadMedida {
   descripcion String?
 
   @@map("unidades_medida")
+}
+
+// ─── Materiales Residuales ───────────────────────────────────────────────────
+
+model MaterialResidual {
+  id        String   @id @default(uuid())
+  insumoId  String
+  altoCm    Float
+  anchoCm   Float
+  cantidad  Int      @default(1)
+  nota      String?
+  estado    String   @default("disponible") // disponible | usado
+  createdAt DateTime @default(now())
+
+  insumo Insumo @relation(fields: [insumoId], references: [id])
+
+  @@map("materiales_residuales")
 }
 
 // ─── Configuración y Auditoría ───────────────────────────────────────────────
