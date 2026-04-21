@@ -28,6 +28,8 @@ export interface ResultadoComparacion {
   totalCortes: number;
   totalAhorro: number;
   cortesReservados: number;
+  cantidadDisponible: number;   // retazos disponibles (MaterialResidual.cantidad)
+  cantidadUsada: number;        // suma de cantidades de cortes reservados en este retazo
 }
 
 const MEDIDAS_RE = /^(\d+(?:\.\d+)?)[xX×*](\d+(?:\.\d+)?)$/;
@@ -37,7 +39,8 @@ export async function compararResidual(
   retazoAltoCm: number,
   retazoAnchoCm: number,
   factorDesperdicio: number,
-  residualId?: string          // si se pasa, marca cuáles ya reservó este retazo
+  residualId?: string,          // si se pasa, marca cuáles ya reservó este retazo
+  cantidadRetazo: number = 1,   // cantidad de retazos disponibles (MaterialResidual.cantidad)
 ): Promise<ResultadoComparacion> {
   const insumo = await prisma.insumo.findUnique({
     where: { id: insumoId },
@@ -56,7 +59,7 @@ export async function compararResidual(
   });
 
   if (!insumo || !insumo.altoM || !insumo.anchoM) {
-    return { porMueble: [], totalCortes: 0, totalAhorro: 0, cortesReservados: 0 };
+    return { porMueble: [], totalCortes: 0, totalAhorro: 0, cortesReservados: 0, cantidadDisponible: cantidadRetazo, cantidadUsada: 0 };
   }
 
   // Precio de referencia
@@ -137,11 +140,16 @@ export async function compararResidual(
     .sort((a, b) => b.ahorroTotal - a.ahorroTotal);
 
   const cortesReservados = coincidencias.filter((c) => c.reservadoEnActual).length;
+  const cantidadUsada = coincidencias
+    .filter((c) => c.reservadoEnActual)
+    .reduce((s, c) => s + c.cantidad, 0);
 
   return {
     porMueble,
     totalCortes: coincidencias.length,
     totalAhorro: coincidencias.reduce((s, c) => s + c.ahorroEstimado, 0),
     cortesReservados,
+    cantidadDisponible: cantidadRetazo,
+    cantidadUsada,
   };
 }
