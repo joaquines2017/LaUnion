@@ -15,6 +15,11 @@ interface InsumoRef {
   anchoM: number | null;
 }
 
+interface ReservaRef {
+  muebleId: string;
+  mueble: { nombre: string; codigo: string };
+}
+
 interface Residual {
   id: string;
   insumoId: string;
@@ -25,6 +30,7 @@ interface Residual {
   estado: string;
   createdAt: string;
   insumo: InsumoRef;
+  reservas: ReservaRef[];
 }
 
 export default function ResidualesPage() {
@@ -102,7 +108,7 @@ export default function ResidualesPage() {
       {cargando ? (
         <p className="text-sm text-muted-foreground">Cargando…</p>
       ) : (
-        <TablaResiduales items={items} />
+        <TablaResiduales items={items} onReservasChange={cargar} />
       )}
     </div>
   );

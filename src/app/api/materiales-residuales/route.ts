@@ -33,6 +33,12 @@ export async function GET(req: NextRequest) {
           espesormm: true,
         },
       },
+      reservas: {
+        select: {
+          muebleId: true,
+          mueble: { select: { nombre: true, codigo: true } },
+        },
+      },
     },
   });
 

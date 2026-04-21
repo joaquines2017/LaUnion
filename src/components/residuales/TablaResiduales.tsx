@@ -15,6 +15,11 @@ interface InsumoRef {
   anchoM: number | null;
 }
 
+interface ReservaRef {
+  muebleId: string;
+  mueble: { nombre: string; codigo: string };
+}
+
 interface Residual {
   id: string;
   insumoId: string;
@@ -25,13 +30,15 @@ interface Residual {
   estado: string;
   createdAt: string;
   insumo: InsumoRef;
+  reservas: ReservaRef[];
 }
 
 interface Props {
   items: Residual[];
+  onReservasChange?: () => void;
 }
 
-export function TablaResiduales({ items }: Props) {
+export function TablaResiduales({ items, onReservasChange }: Props) {
   const router = useRouter();
   const [panelId, setPanelId] = useState<string | null>(null);
 
@@ -77,6 +84,7 @@ export function TablaResiduales({ items }: Props) {
               <th className="text-center">Dimensiones</th>
               <th className="text-center">Piezas</th>
               <th>Nota</th>
+              <th>Reservas</th>
               <th className="text-center">Estado</th>
               <th className="text-right">Acciones</th>
             </tr>
@@ -84,6 +92,12 @@ export function TablaResiduales({ items }: Props) {
           <tbody>
             {items.map((item) => {
               const disponible = item.estado === "disponible";
+              // Deduplicate muebles from reservas
+              const muebleMap = new Map<string, { nombre: string; codigo: string }>();
+              for (const r of item.reservas) {
+                if (!muebleMap.has(r.muebleId)) muebleMap.set(r.muebleId, r.mueble);
+              }
+              const muebles = Array.from(muebleMap.values());
               return (
                 <tr key={item.id} className={!disponible ? "opacity-50" : ""}>
                   <td>
@@ -98,6 +112,27 @@ export function TablaResiduales({ items }: Props) {
                   <td className="text-center font-mono text-sm">{item.cantidad}</td>
                   <td className="text-sm text-muted-foreground max-w-[200px]">
                     <span className="truncate block">{item.nota ?? "—"}</span>
+                  </td>
+                  <td className="max-w-[220px]">
+                    {muebles.length === 0 ? (
+                      <span className="text-xs text-muted-foreground/50">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {muebles.map((m) => (
+                          <span
+                            key={m.codigo}
+                            className="inline-flex items-center gap-1 text-[11px] bg-primary/8 text-primary border border-primary/20 rounded px-1.5 py-0.5 font-medium"
+                            title={m.nombre}
+                          >
+                            <span className="font-mono">{m.codigo}</span>
+                            <span className="text-primary/70 truncate max-w-[80px]">{m.nombre}</span>
+                          </span>
+                        ))}
+                        <span className="text-[11px] text-muted-foreground self-center">
+                          {item.reservas.length} corte{item.reservas.length !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="text-center">
                     <button
@@ -153,6 +188,7 @@ export function TablaResiduales({ items }: Props) {
         <PanelComparacion
           residual={residualPanel}
           onCerrar={() => setPanelId(null)}
+          onReservasChange={onReservasChange}
         />
       )}
     </>

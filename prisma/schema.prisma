@@ -112,11 +112,12 @@ model Mueble {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  categoria  CategoriaMueble    @relation(fields: [categoriaId], references: [id])
-  materiales DespieceMaterial[]
-  insumos    DespieceInsumo[]
-  versiones  VersionDespiece[]
-  imagenes   MuebleImagen[]
+  categoria          CategoriaMueble    @relation(fields: [categoriaId], references: [id])
+  materiales         DespieceMaterial[]
+  insumos            DespieceInsumo[]
+  versiones          VersionDespiece[]
+  imagenes           MuebleImagen[]
+  reservasResiduales ReservaResidual[]
 
   @@map("muebles")
 }
@@ -147,8 +148,9 @@ model DespieceMaterial {
   costoTotal     Decimal  @db.Decimal(12, 2)
   orden          Int      @default(0)
 
-  mueble Mueble  @relation(fields: [muebleId], references: [id], onDelete: Cascade)
-  insumo Insumo? @relation(fields: [insumoId], references: [id])
+  mueble          Mueble           @relation(fields: [muebleId], references: [id], onDelete: Cascade)
+  insumo          Insumo?          @relation(fields: [insumoId], references: [id])
+  reservaResidual ReservaResidual?
 
   @@map("despiece_materiales")
 }
@@ -221,9 +223,26 @@ model MaterialResidual {
   estado    String   @default("disponible") // disponible | usado
   createdAt DateTime @default(now())
 
-  insumo Insumo @relation(fields: [insumoId], references: [id])
+  insumo   Insumo            @relation(fields: [insumoId], references: [id])
+  reservas ReservaResidual[]
 
   @@map("materiales_residuales")
+}
+
+// ─── Reservas de Residuales ──────────────────────────────────────────────────
+
+model ReservaResidual {
+  id                 String   @id @default(uuid())
+  materialResidualId String
+  despieceMaterialId String   @unique  // un corte = un solo retazo (exclusivo)
+  muebleId           String
+  createdAt          DateTime @default(now())
+
+  materialResidual MaterialResidual @relation(fields: [materialResidualId], references: [id], onDelete: Cascade)
+  despieceMaterial DespieceMaterial @relation(fields: [despieceMaterialId], references: [id], onDelete: Cascade)
+  mueble           Mueble           @relation(fields: [muebleId], references: [id], onDelete: Cascade)
+
+  @@map("reservas_residual")
 }
 
 // ─── Configuración y Auditoría ───────────────────────────────────────────────
