@@ -47,7 +47,7 @@ export default async function MueblesPage({
       include: {
         categoria: { select: { nombre: true } },
         // Todas las imágenes para el carrusel del modal
-        imagenes: { orderBy: { orden: "asc" }, select: { url: true, filename: true } },
+        imagenes: { orderBy: { orden: "asc" }, select: { id: true, url: true, filename: true } },
         _count: { select: { materiales: true, insumos: true } },
       },
     }),
