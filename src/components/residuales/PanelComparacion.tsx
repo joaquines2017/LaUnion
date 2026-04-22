@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, RotateCcw, TrendingDown, Bookmark, BookmarkCheck, Loader2, AlertTriangle } from "lucide-react";
+import { X, RotateCcw, TrendingDown, Bookmark, Loader2, AlertTriangle, Plus, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatearPrecio } from "@/lib/formato";
 import { toast } from "sonner";
@@ -24,7 +24,8 @@ interface Props {
 export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props) {
   const [resultado, setResultado] = useState<ResultadoComparacion | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  // Map: despieceMaterialId → cantidad asignada desde este retazo (0 = no asignado)
+  const [cantidades, setCantidades] = useState<Map<string, number>>(new Map());
   const [guardando, setGuardando] = useState(false);
 
   async function cargar() {
@@ -33,64 +34,77 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
     if (res.ok) {
       const data: ResultadoComparacion = await res.json();
       setResultado(data);
-      // Pre-seleccionar los ya asignados a este retazo
-      const yaReservados = new Set<string>();
+      // Pre-cargar cantidades desde las asignaciones actuales
+      const mapa = new Map<string, number>();
       for (const grupo of data.porMueble) {
         for (const c of grupo.cortes) {
-          if (c.reservadoEnActual) yaReservados.add(c.despieceMaterialId);
+          if (c.cantidadEnActual > 0) mapa.set(c.despieceMaterialId, c.cantidadEnActual);
         }
       }
-      setSeleccionados(yaReservados);
+      setCantidades(mapa);
     }
     setCargando(false);
   }
 
   useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Suma de cantidades de los cortes seleccionados
   const todosCortes = resultado?.porMueble.flatMap((g) => g.cortes) ?? [];
-  const cantidadSeleccionada = todosCortes
-    .filter((c) => seleccionados.has(c.despieceMaterialId))
-    .reduce((s, c) => s + c.cantidad, 0);
+
+  // Total de piezas que estoy asignando desde este retazo
+  const totalAsignado = todosCortes.reduce((s, c) => s + (cantidades.get(c.despieceMaterialId) ?? 0), 0);
   const cantidadDisponible = resultado?.cantidadDisponible ?? residual.cantidad;
-  const capacidadExcedida = cantidadSeleccionada > cantidadDisponible;
+  const capacidadExcedida = totalAsignado > cantidadDisponible;
 
-  function toggleCorte(corte: CorteCoincidente) {
-    // No permitir seleccionar cortes asignados por OTRO retazo
-    if (corte.reservadoEn && !corte.reservadoEnActual) return;
+  // Ahorro de las piezas seleccionadas
+  const ahorroTotal = todosCortes.reduce((s, c) => {
+    const qty = cantidades.get(c.despieceMaterialId) ?? 0;
+    if (qty === 0) return s;
+    // Proporcional a la cantidad asignada sobre la total del corte
+    return s + (c.ahorroEstimado * qty) / c.cantidad;
+  }, 0);
 
-    const yaSeleccionado = seleccionados.has(corte.despieceMaterialId);
-
-    // Al agregar: verificar que no supere la capacidad
-    if (!yaSeleccionado) {
-      const nuevaCantidad = cantidadSeleccionada + corte.cantidad;
-      if (nuevaCantidad > cantidadDisponible) {
-        toast.warning(
-          `No alcanza: este corte necesita ${corte.cantidad} pieza${corte.cantidad !== 1 ? "s" : ""} ` +
-          `y solo quedan ${cantidadDisponible - cantidadSeleccionada} disponible${cantidadDisponible - cantidadSeleccionada !== 1 ? "s" : ""}.`
-        );
-        return;
-      }
-    }
-
-    setSeleccionados((prev) => {
-      const next = new Set(prev);
-      if (next.has(corte.despieceMaterialId)) next.delete(corte.despieceMaterialId);
-      else next.add(corte.despieceMaterialId);
+  function setCantidad(corte: CorteCoincidente, valor: number) {
+    const maxAsignable = corte.cantidad - corte.cantidadEnOtros;
+    const nuevo = Math.max(0, Math.min(valor, maxAsignable));
+    setCantidades((prev) => {
+      const next = new Map(prev);
+      if (nuevo === 0) next.delete(corte.despieceMaterialId);
+      else next.set(corte.despieceMaterialId, nuevo);
       return next;
     });
   }
 
-  async function guardarReservas() {
+  function toggleCorte(corte: CorteCoincidente) {
+    const actual = cantidades.get(corte.despieceMaterialId) ?? 0;
+    if (actual > 0) {
+      // Deseleccionar
+      setCantidad(corte, 0);
+    } else {
+      // Seleccionar con el máximo posible
+      const maxAsignable = corte.cantidad - corte.cantidadEnOtros;
+      const capacidadRestante = cantidadDisponible - totalAsignado;
+      const nuevo = Math.min(maxAsignable, capacidadRestante);
+      if (nuevo <= 0) {
+        toast.warning(`Sin capacidad: quedan ${capacidadRestante} pieza${capacidadRestante !== 1 ? "s" : ""} disponibles en este retazo.`);
+        return;
+      }
+      setCantidad(corte, nuevo);
+    }
+  }
+
+  async function guardarAsignaciones() {
     if (!resultado) return;
     setGuardando(true);
 
+    const asignaciones = todosCortes
+      .filter((c) => (cantidades.get(c.despieceMaterialId) ?? 0) > 0)
+      .map((c) => ({ despieceMaterialId: c.despieceMaterialId, cantidad: cantidades.get(c.despieceMaterialId)! }));
+
     try {
-      // POST con la lista completa deseada (semántica "set")
       const res = await fetch(`/api/materiales-residuales/${residual.id}/comparacion`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ despieceMaterialIds: [...seleccionados] }),
+        body: JSON.stringify({ asignaciones }),
       });
 
       if (!res.ok) {
@@ -101,8 +115,8 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
       }
 
       toast.success(
-        seleccionados.size > 0
-          ? `${seleccionados.size} corte${seleccionados.size !== 1 ? "s" : ""} asignado${seleccionados.size !== 1 ? "s" : ""}`
+        asignaciones.length > 0
+          ? `${asignaciones.length} corte${asignaciones.length !== 1 ? "s" : ""} asignado${asignaciones.length !== 1 ? "s" : ""}`
           : "Asignaciones eliminadas"
       );
       await cargar();
@@ -114,21 +128,17 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
   }
 
   const titulo = `${residual.insumo.descripcion} — ${residual.altoCm}×${residual.anchoCm} cm`;
-
-  // Ahorro de cortes seleccionados
-  const ahorroSeleccionados = todosCortes
-    .filter((c) => seleccionados.has(c.despieceMaterialId))
-    .reduce((s, c) => s + c.ahorroEstimado, 0);
+  const cortesAsignados = todosCortes.filter((c) => (cantidades.get(c.despieceMaterialId) ?? 0) > 0).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onCerrar} />
 
-      <div className="relative z-10 h-full w-full max-w-lg bg-background shadow-xl flex flex-col">
+      <div className="relative z-10 h-full w-full max-w-xl bg-background shadow-xl flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
           <div>
-            <h2 className="text-base font-semibold text-foreground">Comparación de retazo</h2>
+            <h2 className="text-base font-semibold text-foreground">Asignación de retazo</h2>
             <p className="text-xs text-muted-foreground mt-0.5">{titulo}</p>
           </div>
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={onCerrar}>
@@ -157,7 +167,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
           {!cargando && resultado && resultado.totalCortes > 0 && (
             <>
               <p className="text-xs text-muted-foreground">
-                Seleccioná los cortes que vas a usar de este retazo. La suma de piezas no puede superar la cantidad de retazos disponibles ({cantidadDisponible}).
+                Indicá cuántas piezas de cada corte salís de este retazo. Podés asignar el mismo corte desde distintos retazos.
               </p>
 
               {resultado.porMueble.map((grupo) => (
@@ -176,55 +186,26 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
                     <table className="w-full text-xs">
                       <thead className="bg-secondary/60">
                         <tr>
-                          <th className="w-8 px-2 py-1.5"></th>
                           <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Pieza</th>
                           <th className="text-center px-2 py-1.5 font-medium text-muted-foreground">Medidas</th>
-                          <th className="text-center px-2 py-1.5 font-medium text-muted-foreground">Cant.</th>
+                          <th className="text-center px-2 py-1.5 font-medium text-muted-foreground">Total</th>
+                          <th className="text-center px-3 py-1.5 font-medium text-muted-foreground">Desde este retazo</th>
                           <th className="text-right px-3 py-1.5 font-medium text-muted-foreground">Ahorro</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
                         {grupo.cortes.map((corte) => {
-                          const reservadoOtro = corte.reservadoEn && !corte.reservadoEnActual;
-                          const checked = seleccionados.has(corte.despieceMaterialId);
-                          // Deshabilitar si agregar excedería la capacidad
-                          const excederia = !checked && (cantidadSeleccionada + corte.cantidad > cantidadDisponible);
-                          const deshabilitado = !!reservadoOtro || excederia;
+                          const qty = cantidades.get(corte.despieceMaterialId) ?? 0;
+                          const maxAsignable = corte.cantidad - corte.cantidadEnOtros;
+                          const asignado = qty > 0;
                           return (
                             <tr
                               key={corte.despieceMaterialId}
-                              className={`transition-colors ${
-                                reservadoOtro
-                                  ? "opacity-40 cursor-not-allowed bg-secondary/20"
-                                  : excederia && !checked
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : checked
-                                  ? "bg-primary/5 cursor-pointer hover:bg-primary/10"
-                                  : "cursor-pointer hover:bg-secondary/30"
-                              }`}
-                              onClick={() => !deshabilitado && toggleCorte(corte)}
+                              className={`transition-colors ${asignado ? "bg-primary/5" : "hover:bg-secondary/30"} cursor-pointer`}
+                              onClick={() => toggleCorte(corte)}
                             >
-                              <td className="px-2 py-2 text-center">
-                                {reservadoOtro ? (
-                                  <span title="Asignado a otro retazo">
-                                    <BookmarkCheck className="h-3.5 w-3.5 text-muted-foreground/50 mx-auto" />
-                                  </span>
-                                ) : (
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    disabled={excederia && !checked}
-                                    onChange={() => toggleCorte(corte)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="rounded disabled:cursor-not-allowed"
-                                  />
-                                )}
-                              </td>
-                              <td className="px-3 py-2 font-medium truncate max-w-[130px]">
-                                {corte.pieza}
-                                {reservadoOtro && (
-                                  <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">(otro retazo)</span>
-                                )}
+                              <td className="px-3 py-2 font-medium max-w-[140px]">
+                                <span className="truncate block">{corte.pieza}</span>
                               </td>
                               <td className="px-2 py-2 text-center font-mono text-muted-foreground whitespace-nowrap">
                                 {corte.altoCm}×{corte.anchoCm}
@@ -234,7 +215,43 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
                                   </span>
                                 )}
                               </td>
-                              <td className="px-2 py-2 text-center text-muted-foreground">{corte.cantidad}</td>
+                              <td className="px-2 py-2 text-center text-muted-foreground">
+                                <span>{corte.cantidad}</span>
+                                {corte.cantidadEnOtros > 0 && (
+                                  <span className="ml-1 text-[10px] text-amber-600" title={`${corte.cantidadEnOtros} asignadas en otros retazos`}>
+                                    ({corte.cantidadEnOtros} otros)
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    className="h-5 w-5 rounded border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-30"
+                                    onClick={() => setCantidad(corte, qty - 1)}
+                                    disabled={qty === 0}
+                                  >
+                                    <Minus className="h-3 w-3" />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={maxAsignable}
+                                    value={qty}
+                                    onChange={(e) => setCantidad(corte, parseInt(e.target.value, 10) || 0)}
+                                    className={`w-10 text-center rounded border text-sm font-semibold tabular-nums focus:outline-none focus:ring-1 focus:ring-ring py-0.5 ${
+                                      qty > 0 ? "border-primary/40 bg-primary/5 text-primary" : "border-border bg-background text-muted-foreground"
+                                    }`}
+                                  />
+                                  <button
+                                    className="h-5 w-5 rounded border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-30"
+                                    onClick={() => setCantidad(corte, qty + 1)}
+                                    disabled={qty >= maxAsignable || totalAsignado >= cantidadDisponible}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </button>
+                                  <span className="text-[10px] text-muted-foreground ml-0.5">/ {maxAsignable}</span>
+                                </div>
+                              </td>
                               <td className="px-3 py-2 text-right font-mono text-emerald-700">
                                 {corte.ahorroEstimado > 0 ? formatearPrecio(corte.ahorroEstimado) : "—"}
                               </td>
@@ -253,7 +270,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
         {/* Footer */}
         {!cargando && resultado && resultado.totalCortes > 0 && (
           <div className="px-5 py-3 border-t border-border bg-secondary/20 shrink-0 space-y-2">
-            {/* Indicador de capacidad */}
+            {/* Barra de capacidad */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
@@ -264,14 +281,14 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
                     </span>
                   )}
                 </span>
-                <span className={`font-mono font-semibold tabular-nums ${capacidadExcedida ? "text-destructive" : cantidadSeleccionada > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                  {cantidadSeleccionada} / {cantidadDisponible}
+                <span className={`font-mono font-semibold tabular-nums ${capacidadExcedida ? "text-destructive" : totalAsignado > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                  {totalAsignado} / {cantidadDisponible}
                 </span>
               </div>
               <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${capacidadExcedida ? "bg-destructive" : cantidadSeleccionada === cantidadDisponible ? "bg-amber-500" : "bg-emerald-500"}`}
-                  style={{ width: `${Math.min(100, (cantidadSeleccionada / cantidadDisponible) * 100)}%` }}
+                  className={`h-full rounded-full transition-all ${capacidadExcedida ? "bg-destructive" : totalAsignado === cantidadDisponible ? "bg-amber-500" : "bg-emerald-500"}`}
+                  style={{ width: `${Math.min(100, (totalAsignado / cantidadDisponible) * 100)}%` }}
                 />
               </div>
             </div>
@@ -279,17 +296,17 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
             {capacidadExcedida && (
               <div className="flex items-center gap-1.5 text-xs text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                <span>La selección supera los retazos disponibles.</span>
+                <span>La asignación supera los retazos disponibles.</span>
               </div>
             )}
 
-            {seleccionados.size > 0 && !capacidadExcedida && (
+            {cortesAsignados > 0 && !capacidadExcedida && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {seleccionados.size} corte{seleccionados.size !== 1 ? "s" : ""} a asignar
+                  {cortesAsignados} corte{cortesAsignados !== 1 ? "s" : ""} · {totalAsignado} pz
                 </span>
                 <span className="font-mono font-bold text-emerald-700 tabular-nums">
-                  Ahorro: {formatearPrecio(ahorroSeleccionados)}
+                  Ahorro: {formatearPrecio(ahorroTotal)}
                 </span>
               </div>
             )}
@@ -297,7 +314,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
             <div className="flex gap-2">
               <Button
                 className="flex-1"
-                onClick={guardarReservas}
+                onClick={guardarAsignaciones}
                 disabled={guardando || capacidadExcedida}
               >
                 {guardando ? (

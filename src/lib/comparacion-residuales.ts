@@ -9,12 +9,12 @@ export interface CorteCoincidente {
   pieza: string;
   altoCm: number;
   anchoCm: number;
-  cantidad: number;
+  cantidad: number;           // total de piezas que necesita el mueble
   rotado: boolean;
   ahorroEstimado: number;
-  // Reserva
-  reservadoEn: string | null;        // id del MaterialResidual que lo reserva (null = libre)
-  reservadoEnActual: boolean;        // true si lo reserva este mismo retazo
+  cantidadEnActual: number;   // piezas asignadas desde ESTE retazo (0 = ninguna)
+  cantidadEnOtros: number;    // piezas asignadas desde OTROS retazos
+  reservadoEnActual: boolean; // = cantidadEnActual > 0 (para compatibilidad UI)
 }
 
 export interface ResultadoComparacion {
@@ -28,19 +28,20 @@ export interface ResultadoComparacion {
   totalCortes: number;
   totalAhorro: number;
   cortesReservados: number;
-  cantidadDisponible: number;   // retazos disponibles (MaterialResidual.cantidad)
-  cantidadUsada: number;        // suma de cantidades de cortes reservados en este retazo
+  cantidadDisponible: number;   // capacidad efectiva para este retazo
+  cantidadUsada: number;        // piezas ya asignadas desde este retazo
 }
 
-const MEDIDAS_RE = /^(\d+(?:\.\d+)?)[xX×*](\d+(?:\.\d+)?)$/;
+// Acepta coma o punto como decimal y espacios alrededor del separador
+const MEDIDAS_RE = /^(\d+(?:[.,]\d+)?)\s*[xX×*]\s*(\d+(?:[.,]\d+)?)$/;
 
 export async function compararResidual(
   insumoId: string,
   retazoAltoCm: number,
   retazoAnchoCm: number,
   factorDesperdicio: number,
-  residualId?: string,          // si se pasa, marca cuáles ya reservó este retazo
-  cantidadRetazo: number = 1,   // cantidad de retazos disponibles (MaterialResidual.cantidad)
+  residualId?: string,
+  cantidadRetazo: number = 1,
 ): Promise<ResultadoComparacion> {
   const insumo = await prisma.insumo.findUnique({
     where: { id: insumoId },
@@ -81,14 +82,18 @@ export async function compararResidual(
       medidas: true,
       cantidad: true,
       mueble: { select: { nombre: true, codigo: true } },
-      reservaResidual: { select: { materialResidualId: true } },
+      reservasResiduales: {
+        select: { materialResidualId: true, cantidadAsignada: true },
+      },
     },
   });
 
   const coincidencias: CorteCoincidente[] = [];
 
   for (const m of materiales) {
-    const match = (m.medidas ?? "").replace(",", ".").match(MEDIDAS_RE);
+    // Normalizar: reemplazar comas por puntos y recortar espacios
+    const medidasNorm = (m.medidas ?? "").trim().replace(/,/g, ".");
+    const match = medidasNorm.match(MEDIDAS_RE);
     if (!match) continue;
 
     const cutAlto = parseFloat(match[1]);
@@ -104,7 +109,13 @@ export async function compararResidual(
       insumo.altoM!, insumo.anchoM!, factorDesperdicio
     );
 
-    const reservadoEn = m.reservaResidual?.materialResidualId ?? null;
+    const reservaActual = residualId
+      ? m.reservasResiduales.find((r) => r.materialResidualId === residualId)
+      : undefined;
+    const cantidadEnActual = reservaActual?.cantidadAsignada ?? 0;
+    const cantidadEnOtros = m.reservasResiduales
+      .filter((r) => r.materialResidualId !== residualId)
+      .reduce((s, r) => s + r.cantidadAsignada, 0);
 
     coincidencias.push({
       despieceMaterialId: m.id,
@@ -117,12 +128,13 @@ export async function compararResidual(
       cantidad,
       rotado: !entraNormal && entraRotado,
       ahorroEstimado: calcularCostoMaterial(pct, precioInsumo),
-      reservadoEn,
-      reservadoEnActual: residualId != null && reservadoEn === residualId,
+      cantidadEnActual,
+      cantidadEnOtros,
+      reservadoEnActual: cantidadEnActual > 0,
     });
   }
 
-  // Agrupar por mueble — incluir todos (libres + reservados por este retazo)
+  // Agrupar por mueble
   const porMuebleMap = new Map<string, CorteCoincidente[]>();
   for (const c of coincidencias) {
     if (!porMuebleMap.has(c.muebleId)) porMuebleMap.set(c.muebleId, []);
@@ -139,13 +151,8 @@ export async function compararResidual(
     }))
     .sort((a, b) => b.ahorroTotal - a.ahorroTotal);
 
-  const cortesReservados = coincidencias.filter((c) => c.reservadoEnActual).length;
-  const cantidadUsada = coincidencias
-    .filter((c) => c.reservadoEnActual)
-    .reduce((s, c) => s + c.cantidad, 0);
-
-  // La capacidad efectiva del panel = retazos libres + los que ya reservé yo
-  // (porque al modificar reservas se restauran primero y luego se descuentan)
+  const cortesReservados = coincidencias.filter((c) => c.cantidadEnActual > 0).length;
+  const cantidadUsada = coincidencias.reduce((s, c) => s + c.cantidadEnActual, 0);
   const cantidadDisponible = cantidadRetazo + cantidadUsada;
 
   return {

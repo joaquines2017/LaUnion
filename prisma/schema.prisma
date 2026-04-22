@@ -148,9 +148,9 @@ model DespieceMaterial {
   costoTotal     Decimal  @db.Decimal(12, 2)
   orden          Int      @default(0)
 
-  mueble          Mueble           @relation(fields: [muebleId], references: [id], onDelete: Cascade)
-  insumo          Insumo?          @relation(fields: [insumoId], references: [id])
-  reservaResidual ReservaResidual?
+  mueble             Mueble            @relation(fields: [muebleId], references: [id], onDelete: Cascade)
+  insumo             Insumo?           @relation(fields: [insumoId], references: [id])
+  reservasResiduales ReservaResidual[]
 
   @@map("despiece_materiales")
 }
@@ -234,14 +234,16 @@ model MaterialResidual {
 model ReservaResidual {
   id                 String   @id @default(uuid())
   materialResidualId String
-  despieceMaterialId String   @unique  // un corte = un solo retazo (exclusivo)
+  despieceMaterialId String
   muebleId           String
+  cantidadAsignada   Int      @default(1)  // piezas asignadas de este retazo a este corte
   createdAt          DateTime @default(now())
 
   materialResidual MaterialResidual @relation(fields: [materialResidualId], references: [id], onDelete: Cascade)
   despieceMaterial DespieceMaterial @relation(fields: [despieceMaterialId], references: [id], onDelete: Cascade)
   mueble           Mueble           @relation(fields: [muebleId], references: [id], onDelete: Cascade)
 
+  @@unique([materialResidualId, despieceMaterialId])  // un retazo = una entrada por corte
   @@map("reservas_residual")
 }
 
