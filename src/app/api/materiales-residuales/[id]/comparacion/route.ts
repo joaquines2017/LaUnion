@@ -112,7 +112,15 @@ export async function POST(
   // Diferencia neta: positivo = se liberan retazos, negativo = se consumen
   const delta = prevTotal - newTotal;
 
-  // Reemplazar atómicamente reservas y ajustar cantidad del retazo
+  // Guarda explícita contra stock negativo
+  if (residual.cantidad + delta < 0) {
+    return NextResponse.json(
+      { error: `La asignación dejaría el stock en negativo. Disponible: ${residual.cantidad + prevTotal}.` },
+      { status: 400 }
+    );
+  }
+
+  // Reemplazar atómicamente asignaciones y ajustar cantidad del retazo
   await prisma.$transaction([
     prisma.reservaResidual.deleteMany({ where: { materialResidualId: id } }),
     ...materiales.map((m) =>

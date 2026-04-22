@@ -6,6 +6,9 @@ import { z } from "zod";
 const patchSchema = z.object({
   estado: z.enum(["disponible", "usado"]).optional(),
   nota: z.string().optional(),
+  altoCm: z.number().positive().optional(),
+  anchoCm: z.number().positive().optional(),
+  cantidad: z.number().int().min(0).optional(),
 });
 
 export async function PATCH(

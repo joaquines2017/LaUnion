@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart2, Trash2, CheckCircle, Circle } from "lucide-react";
+import { BarChart2, Trash2, CheckCircle, Circle, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { PanelComparacion } from "./PanelComparacion";
 
@@ -33,6 +40,13 @@ interface Residual {
   reservas: ReservaRef[];
 }
 
+interface EditForm {
+  altoCm: string;
+  anchoCm: string;
+  cantidad: string;
+  nota: string;
+}
+
 interface Props {
   items: Residual[];
   onReservasChange?: () => void;
@@ -41,8 +55,55 @@ interface Props {
 export function TablaResiduales({ items, onReservasChange }: Props) {
   const router = useRouter();
   const [panelId, setPanelId] = useState<string | null>(null);
+  const [editItem, setEditItem] = useState<Residual | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({ altoCm: "", anchoCm: "", cantidad: "", nota: "" });
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
 
   const residualPanel = panelId ? items.find((i) => i.id === panelId) ?? null : null;
+
+  function abrirEdicion(item: Residual) {
+    setEditItem(item);
+    setEditForm({
+      altoCm: String(item.altoCm),
+      anchoCm: String(item.anchoCm),
+      cantidad: String(item.cantidad),
+      nota: item.nota ?? "",
+    });
+  }
+
+  async function guardarEdicion() {
+    if (!editItem) return;
+    const altoCm = parseFloat(editForm.altoCm);
+    const anchoCm = parseFloat(editForm.anchoCm);
+    const cantidad = parseInt(editForm.cantidad, 10);
+
+    if (isNaN(altoCm) || altoCm <= 0) { toast.error("Alto inválido"); return; }
+    if (isNaN(anchoCm) || anchoCm <= 0) { toast.error("Ancho inválido"); return; }
+    if (isNaN(cantidad) || cantidad < 0) { toast.error("Cantidad inválida"); return; }
+
+    setGuardandoEdit(true);
+    const res = await fetch(`/api/materiales-residuales/${editItem.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        altoCm,
+        anchoCm,
+        cantidad,
+        nota: editForm.nota.trim() || null,
+      }),
+    });
+
+    if (res.ok) {
+      toast.success("Retazo actualizado");
+      setEditItem(null);
+      onReservasChange?.();
+      router.refresh();
+    } else {
+      const err = await res.json();
+      toast.error(err.error ?? "Error al actualizar");
+    }
+    setGuardandoEdit(false);
+  }
 
   async function toggleEstado(item: Residual) {
     const nuevoEstado = item.estado === "disponible" ? "usado" : "disponible";
@@ -82,9 +143,9 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
             <tr>
               <th>Material</th>
               <th className="text-center">Dimensiones</th>
-              <th className="text-center">Piezas</th>
+              <th className="text-center">Disponibles</th>
               <th>Nota</th>
-              <th>Reservas</th>
+              <th>Asignaciones</th>
               <th className="text-center">Estado</th>
               <th className="text-right">Acciones</th>
             </tr>
@@ -92,7 +153,6 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
           <tbody>
             {items.map((item) => {
               const disponible = item.estado === "disponible";
-              // Deduplicate muebles from reservas
               const muebleMap = new Map<string, { nombre: string; codigo: string }>();
               for (const r of item.reservas) {
                 if (!muebleMap.has(r.muebleId)) muebleMap.set(r.muebleId, r.mueble);
@@ -109,7 +169,11 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
                   <td className="text-center font-mono text-sm tabular-nums">
                     {item.altoCm} × {item.anchoCm} cm
                   </td>
-                  <td className="text-center font-mono text-sm">{item.cantidad}</td>
+                  <td className="text-center font-mono text-sm tabular-nums">
+                    <span className={item.cantidad === 0 ? "text-muted-foreground" : "text-foreground font-semibold"}>
+                      {item.cantidad}
+                    </span>
+                  </td>
                   <td className="text-sm text-muted-foreground max-w-[200px]">
                     <span className="truncate block">{item.nota ?? "—"}</span>
                   </td>
@@ -155,13 +219,22 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
                   </td>
                   <td className="text-right">
                     <div className="flex gap-1 justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:bg-secondary"
+                        onClick={() => abrirEdicion(item)}
+                        title="Editar"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
                       {disponible && (
                         <Button
                           size="sm"
                           variant="ghost"
                           className="h-7 w-7 p-0 text-primary hover:bg-primary/10"
                           onClick={() => setPanelId(item.id)}
-                          title="Ver comparación"
+                          title="Ver asignaciones"
                         >
                           <BarChart2 className="h-3.5 w-3.5" />
                         </Button>
@@ -183,6 +256,80 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* Dialog de edición */}
+      <Dialog open={!!editItem} onOpenChange={(open) => { if (!open) setEditItem(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar retazo</DialogTitle>
+            {editItem && (
+              <p className="text-xs text-muted-foreground">{editItem.insumo.descripcion}</p>
+            )}
+          </DialogHeader>
+
+          <div className="space-y-3 py-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-foreground">Alto (cm)</label>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={editForm.altoCm}
+                  onChange={(e) => setEditForm((f) => ({ ...f, altoCm: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-foreground">Ancho (cm)</label>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={editForm.anchoCm}
+                  onChange={(e) => setEditForm((f) => ({ ...f, anchoCm: e.target.value }))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-foreground">Cantidad disponible</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={editForm.cantidad}
+                onChange={(e) => setEditForm((f) => ({ ...f, cantidad: e.target.value }))}
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Retazos sin asignar actualmente disponibles.
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-foreground">Nota</label>
+              <input
+                type="text"
+                value={editForm.nota}
+                onChange={(e) => setEditForm((f) => ({ ...f, nota: e.target.value }))}
+                placeholder="Opcional…"
+                className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditItem(null)} disabled={guardandoEdit}>
+              Cancelar
+            </Button>
+            <Button onClick={guardarEdicion} disabled={guardandoEdit}>
+              {guardandoEdit ? "Guardando…" : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {residualPanel && (
         <PanelComparacion

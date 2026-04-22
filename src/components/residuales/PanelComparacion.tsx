@@ -33,7 +33,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
     if (res.ok) {
       const data: ResultadoComparacion = await res.json();
       setResultado(data);
-      // Pre-seleccionar los ya reservados por este retazo
+      // Pre-seleccionar los ya asignados a este retazo
       const yaReservados = new Set<string>();
       for (const grupo of data.porMueble) {
         for (const c of grupo.cortes) {
@@ -56,7 +56,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
   const capacidadExcedida = cantidadSeleccionada > cantidadDisponible;
 
   function toggleCorte(corte: CorteCoincidente) {
-    // No permitir seleccionar cortes reservados por OTRO retazo
+    // No permitir seleccionar cortes asignados por OTRO retazo
     if (corte.reservadoEn && !corte.reservadoEnActual) return;
 
     const yaSeleccionado = seleccionados.has(corte.despieceMaterialId);
@@ -95,20 +95,20 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
 
       if (!res.ok) {
         const err = await res.json();
-        toast.error(err.error ?? "Error al reservar");
+        toast.error(err.error ?? "Error al asignar");
         setGuardando(false);
         return;
       }
 
       toast.success(
         seleccionados.size > 0
-          ? `${seleccionados.size} corte${seleccionados.size !== 1 ? "s" : ""} reservado${seleccionados.size !== 1 ? "s" : ""}`
-          : "Reservas eliminadas"
+          ? `${seleccionados.size} corte${seleccionados.size !== 1 ? "s" : ""} asignado${seleccionados.size !== 1 ? "s" : ""}`
+          : "Asignaciones eliminadas"
       );
       await cargar();
       onReservasChange?.();
     } catch {
-      toast.error("Error al guardar reservas");
+      toast.error("Error al guardar asignaciones");
     }
     setGuardando(false);
   }
@@ -206,7 +206,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
                             >
                               <td className="px-2 py-2 text-center">
                                 {reservadoOtro ? (
-                                  <span title="Reservado en otro retazo">
+                                  <span title="Asignado a otro retazo">
                                     <BookmarkCheck className="h-3.5 w-3.5 text-muted-foreground/50 mx-auto" />
                                   </span>
                                 ) : (
@@ -257,10 +257,10 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
-                  Piezas a usar
+                  Piezas a asignar
                   {resultado.cantidadUsada > 0 && (
                     <span className="ml-1 text-muted-foreground/60">
-                      ({resultado.cantidadUsada} ya reservada{resultado.cantidadUsada !== 1 ? "s" : ""})
+                      ({resultado.cantidadUsada} ya asignada{resultado.cantidadUsada !== 1 ? "s" : ""})
                     </span>
                   )}
                 </span>
@@ -286,7 +286,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
             {seleccionados.size > 0 && !capacidadExcedida && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {seleccionados.size} corte{seleccionados.size !== 1 ? "s" : ""} seleccionado{seleccionados.size !== 1 ? "s" : ""}
+                  {seleccionados.size} corte{seleccionados.size !== 1 ? "s" : ""} a asignar
                 </span>
                 <span className="font-mono font-bold text-emerald-700 tabular-nums">
                   Ahorro: {formatearPrecio(ahorroSeleccionados)}
@@ -305,7 +305,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
                 ) : (
                   <Bookmark className="h-3.5 w-3.5 mr-1.5" />
                 )}
-                {guardando ? "Guardando…" : "Guardar reservas"}
+                {guardando ? "Guardando…" : "Guardar asignaciones"}
               </Button>
               <Button variant="outline" onClick={onCerrar}>Cerrar</Button>
             </div>
