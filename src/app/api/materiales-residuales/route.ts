@@ -37,6 +37,7 @@ export async function GET(req: NextRequest) {
         select: {
           muebleId: true,
           mueble: { select: { nombre: true, codigo: true } },
+          despieceMaterial: { select: { cantidad: true } },
         },
       },
     },

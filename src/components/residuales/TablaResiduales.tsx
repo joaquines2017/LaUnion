@@ -25,6 +25,7 @@ interface InsumoRef {
 interface ReservaRef {
   muebleId: string;
   mueble: { nombre: string; codigo: string };
+  despieceMaterial: { cantidad: string | number };
 }
 
 interface Residual {
@@ -153,9 +154,15 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
           <tbody>
             {items.map((item) => {
               const disponible = item.estado === "disponible";
-              const muebleMap = new Map<string, { nombre: string; codigo: string }>();
+              // Agrupar por mueble y sumar cantidades asignadas
+              const muebleMap = new Map<string, { nombre: string; codigo: string; cantidad: number }>();
               for (const r of item.reservas) {
-                if (!muebleMap.has(r.muebleId)) muebleMap.set(r.muebleId, r.mueble);
+                const qty = Number(r.despieceMaterial.cantidad);
+                if (muebleMap.has(r.muebleId)) {
+                  muebleMap.get(r.muebleId)!.cantidad += qty;
+                } else {
+                  muebleMap.set(r.muebleId, { ...r.mueble, cantidad: qty });
+                }
               }
               const muebles = Array.from(muebleMap.values());
               return (
@@ -181,20 +188,16 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
                     {muebles.length === 0 ? (
                       <span className="text-xs text-muted-foreground/50">—</span>
                     ) : (
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-col gap-1">
                         {muebles.map((m) => (
-                          <span
-                            key={m.codigo}
-                            className="inline-flex items-center gap-1 text-[11px] bg-primary/8 text-primary border border-primary/20 rounded px-1.5 py-0.5 font-medium"
-                            title={m.nombre}
-                          >
-                            <span className="font-mono">{m.codigo}</span>
-                            <span className="text-primary/70 truncate max-w-[80px]">{m.nombre}</span>
-                          </span>
+                          <div key={m.codigo} className="flex items-baseline gap-1.5 text-[11px]">
+                            <span className="font-mono text-muted-foreground shrink-0">{m.codigo}</span>
+                            <span className="text-foreground truncate max-w-[140px]" title={m.nombre}>{m.nombre}</span>
+                            <span className="text-muted-foreground shrink-0">
+                              · {m.cantidad} pz
+                            </span>
+                          </div>
                         ))}
-                        <span className="text-[11px] text-muted-foreground self-center">
-                          {item.reservas.length} corte{item.reservas.length !== 1 ? "s" : ""}
-                        </span>
                       </div>
                     )}
                   </td>
