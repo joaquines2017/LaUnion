@@ -144,12 +144,16 @@ export async function compararResidual(
     .filter((c) => c.reservadoEnActual)
     .reduce((s, c) => s + c.cantidad, 0);
 
+  // La capacidad efectiva del panel = retazos libres + los que ya reservé yo
+  // (porque al modificar reservas se restauran primero y luego se descuentan)
+  const cantidadDisponible = cantidadRetazo + cantidadUsada;
+
   return {
     porMueble,
     totalCortes: coincidencias.length,
     totalAhorro: coincidencias.reduce((s, c) => s + c.ahorroEstimado, 0),
     cortesReservados,
-    cantidadDisponible: cantidadRetazo,
+    cantidadDisponible,
     cantidadUsada,
   };
 }

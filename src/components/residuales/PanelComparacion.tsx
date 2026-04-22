@@ -256,7 +256,14 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
             {/* Indicador de capacidad */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Retazos utilizados</span>
+                <span className="text-muted-foreground">
+                  Piezas a usar
+                  {resultado.cantidadUsada > 0 && (
+                    <span className="ml-1 text-muted-foreground/60">
+                      ({resultado.cantidadUsada} ya reservada{resultado.cantidadUsada !== 1 ? "s" : ""})
+                    </span>
+                  )}
+                </span>
                 <span className={`font-mono font-semibold tabular-nums ${capacidadExcedida ? "text-destructive" : cantidadSeleccionada > 0 ? "text-foreground" : "text-muted-foreground"}`}>
                   {cantidadSeleccionada} / {cantidadDisponible}
                 </span>

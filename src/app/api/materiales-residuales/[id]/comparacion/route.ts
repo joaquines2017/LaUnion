@@ -27,10 +27,19 @@ export async function GET(
 }
 
 // Acepta la lista COMPLETA de cortes deseados (semántica "set").
-// Si despieceMaterialIds está vacío → elimina todas las reservas.
+// Ajusta MaterialResidual.cantidad restando o reponiendo piezas según el cambio neto.
 const reservaSchema = z.object({
   despieceMaterialIds: z.array(z.string().uuid()),
 });
+
+// Suma las cantidades de DespieceMaterial para un conjunto de reservas existentes
+async function prevTotalReservado(materialResidualId: string): Promise<number> {
+  const reservas = await prisma.reservaResidual.findMany({
+    where: { materialResidualId },
+    include: { despieceMaterial: { select: { cantidad: true } } },
+  });
+  return reservas.reduce((s, r) => s + Number(r.despieceMaterial.cantidad), 0);
+}
 
 export async function POST(
   req: NextRequest,
@@ -49,9 +58,18 @@ export async function POST(
 
   const { despieceMaterialIds } = parsed.data;
 
-  // Si la lista está vacía, solo limpia
+  // Cuántas piezas tenía reservadas este retazo antes del cambio
+  const prevTotal = await prevTotalReservado(id);
+
+  // Caso: lista vacía → liberar todo y restituir cantidad
   if (despieceMaterialIds.length === 0) {
-    await prisma.reservaResidual.deleteMany({ where: { materialResidualId: id } });
+    await prisma.$transaction([
+      prisma.reservaResidual.deleteMany({ where: { materialResidualId: id } }),
+      prisma.materialResidual.update({
+        where: { id },
+        data: { cantidad: { increment: prevTotal } },
+      }),
+    ]);
     return NextResponse.json({ ok: true, reservadas: 0 });
   }
 
@@ -72,24 +90,29 @@ export async function POST(
     );
   }
 
-  // Obtener muebleId y cantidad de cada despieceMaterial
+  // Obtener muebleId y cantidad de cada corte seleccionado
   const materiales = await prisma.despieceMaterial.findMany({
     where: { id: { in: despieceMaterialIds } },
     select: { id: true, muebleId: true, cantidad: true },
   });
 
-  // Validar que la suma de cantidades no supere los retazos disponibles
-  const totalPiezas = materiales.reduce((s, m) => s + Number(m.cantidad), 0);
-  if (totalPiezas > residual.cantidad) {
+  const newTotal = materiales.reduce((s, m) => s + Number(m.cantidad), 0);
+
+  // Capacidad efectiva = retazos libres actualmente + los que ya tenía reservados yo
+  const efectivoDisponible = residual.cantidad + prevTotal;
+  if (newTotal > efectivoDisponible) {
     return NextResponse.json(
       {
-        error: `La cantidad total de piezas a cortar (${totalPiezas}) supera los retazos disponibles (${residual.cantidad}). Reducí la selección o aumentá la cantidad del retazo.`,
+        error: `La cantidad de piezas seleccionadas (${newTotal}) supera la capacidad disponible (${efectivoDisponible}). Reducí la selección.`,
       },
       { status: 400 }
     );
   }
 
-  // Reemplazar atómicamente todas las reservas de este retazo
+  // Diferencia neta: positivo = se liberan retazos, negativo = se consumen
+  const delta = prevTotal - newTotal;
+
+  // Reemplazar atómicamente reservas y ajustar cantidad del retazo
   await prisma.$transaction([
     prisma.reservaResidual.deleteMany({ where: { materialResidualId: id } }),
     ...materiales.map((m) =>
@@ -97,12 +120,16 @@ export async function POST(
         data: { materialResidualId: id, despieceMaterialId: m.id, muebleId: m.muebleId },
       })
     ),
+    prisma.materialResidual.update({
+      where: { id },
+      data: { cantidad: { increment: delta } },
+    }),
   ]);
 
   return NextResponse.json({ ok: true, reservadas: materiales.length });
 }
 
-// DELETE: quitar todas las reservas de este retazo (o un subconjunto)
+// DELETE: liberar todas las reservas (o un subconjunto) y restituir cantidad
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -112,7 +139,6 @@ export async function DELETE(
 
   const { id } = await params;
 
-  // Si hay body con IDs, borra solo esos; si no hay body, borra todos
   let despieceMaterialIds: string[] | null = null;
   try {
     const body = await req.json();
@@ -120,11 +146,28 @@ export async function DELETE(
     if (parsed.success) despieceMaterialIds = parsed.data.despieceMaterialIds;
   } catch { /* sin body */ }
 
-  await prisma.reservaResidual.deleteMany({
+  // Calcular cuántas piezas se van a liberar
+  const reservasAEliminar = await prisma.reservaResidual.findMany({
     where: despieceMaterialIds
       ? { materialResidualId: id, despieceMaterialId: { in: despieceMaterialIds } }
       : { materialResidualId: id },
+    include: { despieceMaterial: { select: { cantidad: true } } },
   });
+  const cantidadARestituir = reservasAEliminar.reduce(
+    (s, r) => s + Number(r.despieceMaterial.cantidad), 0
+  );
+
+  await prisma.$transaction([
+    prisma.reservaResidual.deleteMany({
+      where: despieceMaterialIds
+        ? { materialResidualId: id, despieceMaterialId: { in: despieceMaterialIds } }
+        : { materialResidualId: id },
+    }),
+    prisma.materialResidual.update({
+      where: { id },
+      data: { cantidad: { increment: cantidadARestituir } },
+    }),
+  ]);
 
   return NextResponse.json({ ok: true });
 }
