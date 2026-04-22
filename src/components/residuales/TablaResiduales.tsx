@@ -184,17 +184,23 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
                   <td className="text-sm text-muted-foreground max-w-[200px]">
                     <span className="truncate block">{item.nota ?? "—"}</span>
                   </td>
-                  <td className="max-w-[220px]">
+                  <td className="max-w-[240px]">
                     {muebles.length === 0 ? (
-                      <span className="text-xs text-muted-foreground/50">—</span>
+                      <span className="text-xs text-muted-foreground/40">Sin asignar</span>
                     ) : (
                       <div className="flex flex-col gap-1">
                         {muebles.map((m) => (
-                          <div key={m.codigo} className="flex items-baseline gap-1.5 text-[11px]">
-                            <span className="font-mono text-muted-foreground shrink-0">{m.codigo}</span>
-                            <span className="text-foreground truncate max-w-[140px]" title={m.nombre}>{m.nombre}</span>
-                            <span className="text-muted-foreground shrink-0">
-                              · {m.cantidad} pz
+                          <div
+                            key={m.codigo}
+                            className="flex items-center justify-between gap-2 rounded-md bg-primary/5 border border-primary/15 px-2 py-1 text-[11px]"
+                            title={m.nombre}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-mono text-muted-foreground shrink-0">{m.codigo}</span>
+                              <span className="text-foreground font-medium truncate">{m.nombre}</span>
+                            </div>
+                            <span className="shrink-0 font-semibold text-primary tabular-nums">
+                              {m.cantidad} pz
                             </span>
                           </div>
                         ))}
