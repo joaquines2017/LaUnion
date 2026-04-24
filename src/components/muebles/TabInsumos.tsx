@@ -174,7 +174,7 @@ export function TabInsumos({ filas, onChange }: Props) {
                   <button
                     type="button"
                     onClick={() => eliminarFila(fila._key)}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-1 rounded"
+                    className="opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 transition-opacity p-1 rounded"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

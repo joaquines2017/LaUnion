@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const patchSchema = z.object({
   estado: z.enum(["disponible", "usado"]).optional(),
-  nota: z.string().optional(),
+  nota: z.string().nullish(),
   altoCm: z.number().positive().optional(),
   anchoCm: z.number().positive().optional(),
   cantidad: z.number().int().min(0).optional(),
@@ -22,7 +22,7 @@ export async function PATCH(
   const body = await req.json();
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
   }
 
   const item = await prisma.materialResidual.update({

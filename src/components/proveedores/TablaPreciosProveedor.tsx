@@ -307,19 +307,19 @@ export function TablaPreciosProveedor({
                       {enEdicion ? (
                         <div className="flex gap-1 justify-end">
                           <Button size="sm" variant="ghost"
-                            className="h-7 w-7 p-0 text-emerald-600 hover:bg-emerald-50"
+                            className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 disabled:opacity-30"
                             onClick={() => guardarEdicion(fila)} disabled={guardando}>
                             <Check className="h-3.5 w-3.5" />
                           </Button>
                           <Button size="sm" variant="ghost"
-                            className="h-7 w-7 p-0 text-muted-foreground"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-secondary"
                             onClick={() => setEditId(null)}>
                             <X className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       ) : (
                         <Button size="sm" variant="ghost"
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
                           onClick={() => { setEditId(fila.id); setEditValor(formatearNumeroInput(Number(fila.precio))); }}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart2, Trash2, CheckCircle, Circle, Pencil } from "lucide-react";
+import { BarChart2, Trash2, CheckCircle, Circle, Pencil, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { PanelComparacion } from "./PanelComparacion";
+import { PanelComparacionMultiple } from "./PanelComparacionMultiple";
 
 interface InsumoRef {
   id: string;
@@ -24,8 +25,8 @@ interface InsumoRef {
 
 interface ReservaRef {
   muebleId: string;
+  cantidadAsignada: number;
   mueble: { nombre: string; codigo: string };
-  despieceMaterial: { cantidad: string | number };
 }
 
 interface Residual {
@@ -56,11 +57,33 @@ interface Props {
 export function TablaResiduales({ items, onReservasChange }: Props) {
   const router = useRouter();
   const [panelId, setPanelId] = useState<string | null>(null);
+  const [panelMultiple, setPanelMultiple] = useState(false);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [editItem, setEditItem] = useState<Residual | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({ altoCm: "", anchoCm: "", cantidad: "", nota: "" });
   const [guardandoEdit, setGuardandoEdit] = useState(false);
 
   const residualPanel = panelId ? items.find((i) => i.id === panelId) ?? null : null;
+  const residualesSeleccionados = items.filter((i) => seleccionados.has(i.id));
+
+  function toggleSeleccion(id: string) {
+    setSeleccionados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleTodos() {
+    const disponibles = items.filter((i) => i.estado === "disponible").map((i) => i.id);
+    const todosSeleccionados = disponibles.every((id) => seleccionados.has(id));
+    if (todosSeleccionados) {
+      setSeleccionados(new Set());
+    } else {
+      setSeleccionados(new Set(disponibles));
+    }
+  }
 
   function abrirEdicion(item: Residual) {
     setEditItem(item);
@@ -124,9 +147,14 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
     const res = await fetch(`/api/materiales-residuales/${item.id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Retazo eliminado");
+      setSeleccionados((prev) => { const next = new Set(prev); next.delete(item.id); return next; });
       router.refresh();
     }
   }
+
+  const disponiblesIds = items.filter((i) => i.estado === "disponible").map((i) => i.id);
+  const todosDisponiblesSeleccionados =
+    disponiblesIds.length > 0 && disponiblesIds.every((id) => seleccionados.has(id));
 
   if (items.length === 0) {
     return (
@@ -138,10 +166,44 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
 
   return (
     <>
+      {/* Barra de selección múltiple */}
+      {seleccionados.size > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+          <span className="text-foreground font-medium">
+            {seleccionados.size} retazo{seleccionados.size !== 1 ? "s" : ""} seleccionado{seleccionados.size !== 1 ? "s" : ""}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSeleccionados(new Set())}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setPanelMultiple(true)}
+            >
+              <Layers className="h-3.5 w-3.5 mr-1.5" />
+              Comparar seleccionados
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-card rounded-lg border border-border shadow-card overflow-hidden">
         <table className="na-table">
           <thead>
             <tr>
+              <th className="w-8">
+                <input
+                  type="checkbox"
+                  checked={todosDisponiblesSeleccionados}
+                  onChange={toggleTodos}
+                  title="Seleccionar todos los disponibles"
+                  className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                />
+              </th>
               <th>Material</th>
               <th className="text-center">Dimensiones</th>
               <th className="text-center">Disponibles</th>
@@ -154,19 +216,23 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
           <tbody>
             {items.map((item) => {
               const disponible = item.estado === "disponible";
-              // Agrupar por mueble y sumar cantidades asignadas
-              const muebleMap = new Map<string, { nombre: string; codigo: string; cantidad: number }>();
-              for (const r of item.reservas) {
-                const qty = Number(r.despieceMaterial.cantidad);
-                if (muebleMap.has(r.muebleId)) {
-                  muebleMap.get(r.muebleId)!.cantidad += qty;
-                } else {
-                  muebleMap.set(r.muebleId, { ...r.mueble, cantidad: qty });
-                }
-              }
-              const muebles = Array.from(muebleMap.values());
+              const checked = seleccionados.has(item.id);
+              const muebles = item.reservas.map((r) => ({
+                ...r.mueble,
+                cantidad: r.cantidadAsignada,
+              }));
               return (
-                <tr key={item.id} className={!disponible ? "opacity-50" : ""}>
+                <tr key={item.id} className={`${!disponible ? "opacity-50" : ""} ${checked ? "bg-primary/5" : ""}`}>
+                  <td>
+                    {disponible && (
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSeleccion(item.id)}
+                        className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                      />
+                    )}
+                  </td>
                   <td>
                     <div className="font-medium text-foreground">{item.insumo.descripcion}</div>
                     {item.insumo.espesormm && (
@@ -231,7 +297,7 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 w-7 p-0 text-muted-foreground hover:bg-secondary"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
                         onClick={() => abrirEdicion(item)}
                         title="Editar"
                       >
@@ -241,7 +307,7 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 w-7 p-0 text-primary hover:bg-primary/10"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
                           onClick={() => setPanelId(item.id)}
                           title="Ver asignaciones"
                         >
@@ -340,10 +406,20 @@ export function TablaResiduales({ items, onReservasChange }: Props) {
         </DialogContent>
       </Dialog>
 
+      {/* Panel individual */}
       {residualPanel && (
         <PanelComparacion
           residual={residualPanel}
           onCerrar={() => setPanelId(null)}
+          onReservasChange={onReservasChange}
+        />
+      )}
+
+      {/* Panel múltiple */}
+      {panelMultiple && residualesSeleccionados.length > 0 && (
+        <PanelComparacionMultiple
+          residuales={residualesSeleccionados}
+          onCerrar={() => setPanelMultiple(false)}
           onReservasChange={onReservasChange}
         />
       )}

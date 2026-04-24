@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const parsed = schema.partial().safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
   }
 
   const config = await prisma.configuracionGlobal.upsert({

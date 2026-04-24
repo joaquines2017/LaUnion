@@ -5,7 +5,7 @@ import { X, RotateCcw, TrendingDown, Bookmark, Loader2, AlertTriangle, Plus, Min
 import { Button } from "@/components/ui/button";
 import { formatearPrecio } from "@/lib/formato";
 import { toast } from "sonner";
-import type { ResultadoComparacion, CorteCoincidente } from "@/lib/comparacion-residuales";
+import type { ResultadoComparacion } from "@/lib/comparacion-residuales";
 
 interface Residual {
   id: string;
@@ -24,7 +24,7 @@ interface Props {
 export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props) {
   const [resultado, setResultado] = useState<ResultadoComparacion | null>(null);
   const [cargando, setCargando] = useState(true);
-  // Map: despieceMaterialId → cantidad asignada desde este retazo (0 = no asignado)
+  // Map: muebleId → cantidad de retazos asignados a ese mueble
   const [cantidades, setCantidades] = useState<Map<string, number>>(new Map());
   const [guardando, setGuardando] = useState(false);
 
@@ -37,9 +37,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
       // Pre-cargar cantidades desde las asignaciones actuales
       const mapa = new Map<string, number>();
       for (const grupo of data.porMueble) {
-        for (const c of grupo.cortes) {
-          if (c.cantidadEnActual > 0) mapa.set(c.despieceMaterialId, c.cantidadEnActual);
-        }
+        if (grupo.cantidadAsignada > 0) mapa.set(grupo.muebleId, grupo.cantidadAsignada);
       }
       setCantidades(mapa);
     }
@@ -48,47 +46,35 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
 
   useEffect(() => { cargar(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const todosCortes = resultado?.porMueble.flatMap((g) => g.cortes) ?? [];
-
-  // Total de piezas que estoy asignando desde este retazo
-  const totalAsignado = todosCortes.reduce((s, c) => s + (cantidades.get(c.despieceMaterialId) ?? 0), 0);
   const cantidadDisponible = resultado?.cantidadDisponible ?? residual.cantidad;
+
+  // Total de retazos que estoy asignando
+  const totalAsignado = resultado
+    ? resultado.porMueble.reduce((s, g) => s + (cantidades.get(g.muebleId) ?? 0), 0)
+    : 0;
   const capacidadExcedida = totalAsignado > cantidadDisponible;
 
-  // Ahorro de las piezas seleccionadas
-  const ahorroTotal = todosCortes.reduce((s, c) => {
-    const qty = cantidades.get(c.despieceMaterialId) ?? 0;
-    if (qty === 0) return s;
-    // Proporcional a la cantidad asignada sobre la total del corte
-    return s + (c.ahorroEstimado * qty) / c.cantidad;
-  }, 0);
-
-  function setCantidad(corte: CorteCoincidente, valor: number) {
-    const maxAsignable = corte.cantidad - corte.cantidadEnOtros;
-    const nuevo = Math.max(0, Math.min(valor, maxAsignable));
+  function setCantidad(muebleId: string, valor: number) {
+    const nuevo = Math.max(0, Math.min(valor, cantidadDisponible));
     setCantidades((prev) => {
       const next = new Map(prev);
-      if (nuevo === 0) next.delete(corte.despieceMaterialId);
-      else next.set(corte.despieceMaterialId, nuevo);
+      if (nuevo === 0) next.delete(muebleId);
+      else next.set(muebleId, nuevo);
       return next;
     });
   }
 
-  function toggleCorte(corte: CorteCoincidente) {
-    const actual = cantidades.get(corte.despieceMaterialId) ?? 0;
+  function toggleMueble(muebleId: string) {
+    const actual = cantidades.get(muebleId) ?? 0;
     if (actual > 0) {
-      // Deseleccionar
-      setCantidad(corte, 0);
+      setCantidad(muebleId, 0);
     } else {
-      // Seleccionar con el máximo posible
-      const maxAsignable = corte.cantidad - corte.cantidadEnOtros;
       const capacidadRestante = cantidadDisponible - totalAsignado;
-      const nuevo = Math.min(maxAsignable, capacidadRestante);
-      if (nuevo <= 0) {
-        toast.warning(`Sin capacidad: quedan ${capacidadRestante} pieza${capacidadRestante !== 1 ? "s" : ""} disponibles en este retazo.`);
+      if (capacidadRestante <= 0) {
+        toast.warning(`Sin capacidad: ya asignaste los ${cantidadDisponible} retazo${cantidadDisponible !== 1 ? "s" : ""} disponibles.`);
         return;
       }
-      setCantidad(corte, nuevo);
+      setCantidad(muebleId, Math.min(1, capacidadRestante));
     }
   }
 
@@ -96,9 +82,9 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
     if (!resultado) return;
     setGuardando(true);
 
-    const asignaciones = todosCortes
-      .filter((c) => (cantidades.get(c.despieceMaterialId) ?? 0) > 0)
-      .map((c) => ({ despieceMaterialId: c.despieceMaterialId, cantidad: cantidades.get(c.despieceMaterialId)! }));
+    const asignaciones = resultado.porMueble
+      .filter((g) => (cantidades.get(g.muebleId) ?? 0) > 0)
+      .map((g) => ({ muebleId: g.muebleId, cantidad: cantidades.get(g.muebleId)! }));
 
     try {
       const res = await fetch(`/api/materiales-residuales/${residual.id}/comparacion`, {
@@ -116,7 +102,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
 
       toast.success(
         asignaciones.length > 0
-          ? `${asignaciones.length} corte${asignaciones.length !== 1 ? "s" : ""} asignado${asignaciones.length !== 1 ? "s" : ""}`
+          ? `Asignado a ${asignaciones.length} mueble${asignaciones.length !== 1 ? "s" : ""}`
           : "Asignaciones eliminadas"
       );
       await cargar();
@@ -128,7 +114,7 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
   }
 
   const titulo = `${residual.insumo.descripcion} — ${residual.altoCm}×${residual.anchoCm} cm`;
-  const cortesAsignados = todosCortes.filter((c) => (cantidades.get(c.despieceMaterialId) ?? 0) > 0).length;
+  const muebesAsignados = resultado?.porMueble.filter((g) => (cantidades.get(g.muebleId) ?? 0) > 0).length ?? 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end">
@@ -167,102 +153,108 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
           {!cargando && resultado && resultado.totalCortes > 0 && (
             <>
               <p className="text-xs text-muted-foreground">
-                Indicá cuántas piezas de cada corte salís de este retazo. Podés asignar el mismo corte desde distintos retazos.
+                Indicá cuántos retazos de este material asignás a cada mueble. Los cortes listados debajo son de referencia: son las piezas del despiece que entran en este retazo.
               </p>
 
-              {resultado.porMueble.map((grupo) => (
-                <div key={grupo.muebleId} className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm font-semibold text-foreground">{grupo.muebleNombre}</span>
-                      <span className="ml-2 font-mono text-xs text-muted-foreground">{grupo.muebleCodigo}</span>
-                    </div>
-                    <span className="text-xs font-mono text-emerald-700 font-semibold">
-                      {formatearPrecio(grupo.ahorroTotal)}
-                    </span>
-                  </div>
+              <div className="space-y-3">
+                {resultado.porMueble.map((grupo) => {
+                  const qty = cantidades.get(grupo.muebleId) ?? 0;
+                  const asignado = qty > 0;
+                  const capacidadRestante = cantidadDisponible - totalAsignado + qty;
 
-                  <div className="rounded-md border border-border overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead className="bg-secondary/60">
-                        <tr>
-                          <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Pieza</th>
-                          <th className="text-center px-2 py-1.5 font-medium text-muted-foreground">Medidas</th>
-                          <th className="text-center px-2 py-1.5 font-medium text-muted-foreground">Total</th>
-                          <th className="text-center px-3 py-1.5 font-medium text-muted-foreground">Desde este retazo</th>
-                          <th className="text-right px-3 py-1.5 font-medium text-muted-foreground">Ahorro</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {grupo.cortes.map((corte) => {
-                          const qty = cantidades.get(corte.despieceMaterialId) ?? 0;
-                          const maxAsignable = corte.cantidad - corte.cantidadEnOtros;
-                          const asignado = qty > 0;
-                          return (
-                            <tr
-                              key={corte.despieceMaterialId}
-                              className={`transition-colors ${asignado ? "bg-primary/5" : "hover:bg-secondary/30"} cursor-pointer`}
-                              onClick={() => toggleCorte(corte)}
-                            >
-                              <td className="px-3 py-2 font-medium max-w-[140px]">
-                                <span className="truncate block">{corte.pieza}</span>
-                              </td>
-                              <td className="px-2 py-2 text-center font-mono text-muted-foreground whitespace-nowrap">
-                                {corte.altoCm}×{corte.anchoCm}
-                                {corte.rotado && (
-                                  <span title="Entra rotado">
-                                    <RotateCcw className="inline h-3 w-3 ml-1 text-amber-500" />
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-2 py-2 text-center text-muted-foreground">
-                                <span>{corte.cantidad}</span>
-                                {corte.cantidadEnOtros > 0 && (
-                                  <span className="ml-1 text-[10px] text-amber-600" title={`${corte.cantidadEnOtros} asignadas en otros retazos`}>
-                                    ({corte.cantidadEnOtros} otros)
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    className="h-5 w-5 rounded border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-30"
-                                    onClick={() => setCantidad(corte, qty - 1)}
-                                    disabled={qty === 0}
-                                  >
-                                    <Minus className="h-3 w-3" />
-                                  </button>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={maxAsignable}
-                                    value={qty}
-                                    onChange={(e) => setCantidad(corte, parseInt(e.target.value, 10) || 0)}
-                                    className={`w-10 text-center rounded border text-sm font-semibold tabular-nums focus:outline-none focus:ring-1 focus:ring-ring py-0.5 ${
-                                      qty > 0 ? "border-primary/40 bg-primary/5 text-primary" : "border-border bg-background text-muted-foreground"
-                                    }`}
-                                  />
-                                  <button
-                                    className="h-5 w-5 rounded border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-30"
-                                    onClick={() => setCantidad(corte, qty + 1)}
-                                    disabled={qty >= maxAsignable || totalAsignado >= cantidadDisponible}
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </button>
-                                  <span className="text-[10px] text-muted-foreground ml-0.5">/ {maxAsignable}</span>
-                                </div>
-                              </td>
-                              <td className="px-3 py-2 text-right font-mono text-emerald-700">
-                                {corte.ahorroEstimado > 0 ? formatearPrecio(corte.ahorroEstimado) : "—"}
-                              </td>
+                  return (
+                    <div
+                      key={grupo.muebleId}
+                      className={`rounded-lg border transition-colors ${
+                        asignado ? "border-primary/30 bg-primary/5" : "border-border bg-background"
+                      }`}
+                    >
+                      {/* Cabecera del mueble */}
+                      <div
+                        className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+                        onClick={() => toggleMueble(grupo.muebleId)}
+                      >
+                        <div className="min-w-0">
+                          <span className="text-sm font-semibold text-foreground">{grupo.muebleNombre}</span>
+                          <span className="ml-2 font-mono text-xs text-muted-foreground">{grupo.muebleCodigo}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {grupo.cortes.length} pieza{grupo.cortes.length !== 1 ? "s" : ""} coincidentes
+                          </span>
+                        </div>
+
+                        {/* Control de cantidad */}
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            className="h-6 w-6 rounded border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-30"
+                            onClick={() => setCantidad(grupo.muebleId, qty - 1)}
+                            disabled={qty === 0}
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <input
+                            type="number"
+                            min={0}
+                            max={capacidadRestante}
+                            value={qty}
+                            onChange={(e) => setCantidad(grupo.muebleId, parseInt(e.target.value, 10) || 0)}
+                            className={`w-12 text-center rounded border text-sm font-semibold tabular-nums focus:outline-none focus:ring-1 focus:ring-ring py-0.5 ${
+                              qty > 0
+                                ? "border-primary/40 bg-primary/5 text-primary"
+                                : "border-border bg-background text-muted-foreground"
+                            }`}
+                          />
+                          <button
+                            className="h-6 w-6 rounded border border-border flex items-center justify-center hover:bg-secondary disabled:opacity-30"
+                            onClick={() => setCantidad(grupo.muebleId, qty + 1)}
+                            disabled={totalAsignado >= cantidadDisponible && qty === (cantidades.get(grupo.muebleId) ?? 0)}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                          <span className="text-[10px] text-muted-foreground ml-0.5">retazo{qty !== 1 ? "s" : ""}</span>
+                        </div>
+                      </div>
+
+                      {/* Cortes de referencia */}
+                      <div className="border-t border-border/50 mx-3 mb-3">
+                        <table className="w-full text-xs mt-2">
+                          <thead>
+                            <tr className="text-muted-foreground">
+                              <th className="text-left pb-1 font-medium pl-1">Pieza</th>
+                              <th className="text-center pb-1 font-medium">Medidas</th>
+                              <th className="text-center pb-1 font-medium">Cant.</th>
+                              <th className="text-right pb-1 font-medium pr-1">Ahorro est.</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
+                          </thead>
+                          <tbody className="divide-y divide-border/40">
+                            {grupo.cortes.map((corte) => (
+                              <tr key={corte.despieceMaterialId} className="text-muted-foreground">
+                                <td className="py-1 pl-1 max-w-[160px]">
+                                  <span className="font-medium block truncate">{corte.pieza}</span>
+                                  {corte.insumoNombre && (
+                                    <span className="text-[10px] text-muted-foreground/60 block truncate">{corte.insumoNombre}</span>
+                                  )}
+                                </td>
+                                <td className="py-1 text-center font-mono whitespace-nowrap">
+                                  {corte.altoCm}×{corte.anchoCm}
+                                  {corte.rotado && (
+                                    <span title="Entra rotado">
+                                      <RotateCcw className="inline h-3 w-3 ml-1 text-amber-500" />
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-1 text-center">{corte.cantidad}</td>
+                                <td className="py-1 text-right font-mono text-emerald-700 pr-1">
+                                  {corte.ahorroEstimado > 0 ? formatearPrecio(corte.ahorroEstimado) : "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           )}
         </div>
@@ -274,20 +266,25 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
-                  Piezas a asignar
+                  Retazos a asignar
                   {resultado.cantidadUsada > 0 && (
                     <span className="ml-1 text-muted-foreground/60">
-                      ({resultado.cantidadUsada} ya asignada{resultado.cantidadUsada !== 1 ? "s" : ""})
+                      ({resultado.cantidadUsada} ya asignado{resultado.cantidadUsada !== 1 ? "s" : ""})
                     </span>
                   )}
                 </span>
-                <span className={`font-mono font-semibold tabular-nums ${capacidadExcedida ? "text-destructive" : totalAsignado > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                <span className={`font-mono font-semibold tabular-nums ${
+                  capacidadExcedida ? "text-destructive" : totalAsignado > 0 ? "text-foreground" : "text-muted-foreground"
+                }`}>
                   {totalAsignado} / {cantidadDisponible}
                 </span>
               </div>
               <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${capacidadExcedida ? "bg-destructive" : totalAsignado === cantidadDisponible ? "bg-amber-500" : "bg-emerald-500"}`}
+                  className={`h-full rounded-full transition-all ${
+                    capacidadExcedida ? "bg-destructive" :
+                    totalAsignado === cantidadDisponible ? "bg-amber-500" : "bg-emerald-500"
+                  }`}
                   style={{ width: `${Math.min(100, (totalAsignado / cantidadDisponible) * 100)}%` }}
                 />
               </div>
@@ -300,13 +297,10 @@ export function PanelComparacion({ residual, onCerrar, onReservasChange }: Props
               </div>
             )}
 
-            {cortesAsignados > 0 && !capacidadExcedida && (
+            {muebesAsignados > 0 && !capacidadExcedida && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {cortesAsignados} corte{cortesAsignados !== 1 ? "s" : ""} · {totalAsignado} pz
-                </span>
-                <span className="font-mono font-bold text-emerald-700 tabular-nums">
-                  Ahorro: {formatearPrecio(ahorroTotal)}
+                  {muebesAsignados} mueble{muebesAsignados !== 1 ? "s" : ""} · {totalAsignado} retazo{totalAsignado !== 1 ? "s" : ""}
                 </span>
               </div>
             )}

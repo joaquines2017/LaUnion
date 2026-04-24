@@ -63,7 +63,7 @@ export function AccionesTabla({ id, entidad, nombre, estadoActual }: Props) {
       <Link
         href={`/${entidad}/${id}`}
         title="Editar"
-        className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-primary"
+        className="inline-flex items-center justify-center h-7 w-7 rounded transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10"
       >
         <Pencil className="h-3.5 w-3.5" />
       </Link>
@@ -75,7 +75,7 @@ export function AccionesTabla({ id, entidad, nombre, estadoActual }: Props) {
             <button
               title="Desactivar"
               disabled={loading}
-              className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-red-50 transition-colors text-muted-foreground hover:text-destructive disabled:opacity-50"
+              className="inline-flex items-center justify-center h-7 w-7 rounded transition-colors text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
             >
               <PowerOff className="h-3.5 w-3.5" />
             </button>
@@ -104,7 +104,7 @@ export function AccionesTabla({ id, entidad, nombre, estadoActual }: Props) {
           title="Reactivar"
           onClick={handleReactivar}
           disabled={loading}
-          className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-emerald-50 transition-colors text-muted-foreground hover:text-emerald-600 disabled:opacity-50"
+          className="inline-flex items-center justify-center h-7 w-7 rounded transition-colors text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
         >
           <Power className="h-3.5 w-3.5" />
         </button>

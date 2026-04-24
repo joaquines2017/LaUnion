@@ -217,7 +217,7 @@ export function GestionCatalogo({
                         <div className="flex gap-1 justify-end">
                           <Button
                             size="sm" variant="ghost"
-                            className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                            className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 disabled:opacity-30"
                             onClick={() => guardarEdicion(item.id)}
                             disabled={guardandoEdit}
                           >
@@ -225,7 +225,7 @@ export function GestionCatalogo({
                           </Button>
                           <Button
                             size="sm" variant="ghost"
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-secondary"
                             onClick={() => setEditId(null)}
                           >
                             <X className="h-3.5 w-3.5" />
@@ -235,7 +235,7 @@ export function GestionCatalogo({
                         <div className="flex gap-1 justify-end">
                           <Button
                             size="sm" variant="ghost"
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
                             onClick={() => iniciarEdicion(item)}
                             title="Editar"
                           >
@@ -244,7 +244,7 @@ export function GestionCatalogo({
                           <Button
                             size="sm" variant="ghost"
                             disabled={enUso > 0 || eliminandoId === item.id}
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                            className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 disabled:opacity-30"
                             onClick={() => eliminar(item)}
                             title={enUso > 0 ? "En uso, no se puede eliminar" : "Eliminar"}
                           >

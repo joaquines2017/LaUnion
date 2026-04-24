@@ -17,6 +17,7 @@ import {
   Layers,
   DollarSign,
   Scissors,
+  ListOrdered,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,8 @@ const navItems: NavItem[] = [
   { href: "/insumos",     label: "Insumos",     icon: Package },
   { href: "/proveedores", label: "Proveedores", icon: Truck },
   { href: "/muebles",     label: "Muebles",     icon: Sofa },
-  { href: "/residuales",  label: "Residuales",  icon: Scissors },
+  { href: "/residuales",   label: "Residuales",    icon: Scissors },
+  { href: "/lista-corte", label: "Lista de Corte", icon: ListOrdered },
   {
     href: "/reportes",
     label: "Reportes",

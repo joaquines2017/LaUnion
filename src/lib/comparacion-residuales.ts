@@ -3,37 +3,49 @@ import { calcularPorcentajePlaca, calcularCostoMaterial } from "@/lib/calculo-co
 
 export interface CorteCoincidente {
   despieceMaterialId: string;
+  pieza: string;
+  insumoNombre: string;  // nombre del insumo especificado en el despiece
+  altoCm: number;
+  anchoCm: number;
+  cantidad: number;
+  rotado: boolean;
+  ahorroEstimado: number;
+}
+
+export interface ResultadoMueble {
   muebleId: string;
   muebleNombre: string;
   muebleCodigo: string;
-  pieza: string;
-  altoCm: number;
-  anchoCm: number;
-  cantidad: number;           // total de piezas que necesita el mueble
-  rotado: boolean;
-  ahorroEstimado: number;
-  cantidadEnActual: number;   // piezas asignadas desde ESTE retazo (0 = ninguna)
-  cantidadEnOtros: number;    // piezas asignadas desde OTROS retazos
-  reservadoEnActual: boolean; // = cantidadEnActual > 0 (para compatibilidad UI)
+  cortes: CorteCoincidente[];
+  ahorroTotal: number;
+  cantidadAsignada: number; // retazos asignados desde ESTE residual a este mueble
 }
 
 export interface ResultadoComparacion {
-  porMueble: {
-    muebleId: string;
-    muebleNombre: string;
-    muebleCodigo: string;
-    cortes: CorteCoincidente[];
-    ahorroTotal: number;
-  }[];
+  porMueble: ResultadoMueble[];
   totalCortes: number;
   totalAhorro: number;
-  cortesReservados: number;
-  cantidadDisponible: number;   // capacidad efectiva para este retazo
-  cantidadUsada: number;        // piezas ya asignadas desde este retazo
+  cantidadDisponible: number; // capacidad efectiva: residual.cantidad + cantidadUsada
+  cantidadUsada: number;      // retazos ya asignados desde este residual
 }
 
 // Acepta coma o punto como decimal y espacios alrededor del separador
 const MEDIDAS_RE = /^(\d+(?:[.,]\d+)?)\s*[xX×*]\s*(\d+(?:[.,]\d+)?)$/;
+
+function getPrecioInsumo(insumo: {
+  precioBase: unknown;
+  precioSeleccionadoId: string | null;
+  precios: { id: string; precio: unknown }[];
+}): number {
+  let precio = 0;
+  if (insumo.precioSeleccionadoId) {
+    const sel = insumo.precios.find((p) => p.id === insumo.precioSeleccionadoId);
+    if (sel) precio = Number(sel.precio);
+  }
+  if (precio === 0 && insumo.precios[0]) precio = Number(insumo.precios[0].precio);
+  if (precio === 0 && insumo.precioBase != null) precio = Number(insumo.precioBase);
+  return precio;
+}
 
 export async function compararResidual(
   insumoId: string,
@@ -43,55 +55,102 @@ export async function compararResidual(
   residualId?: string,
   cantidadRetazo: number = 1,
 ): Promise<ResultadoComparacion> {
-  const insumo = await prisma.insumo.findUnique({
+  // Datos del insumo del retazo (para verificar espesormm)
+  const insumoRetazo = await prisma.insumo.findUnique({
     where: { id: insumoId },
-    select: {
-      altoM: true,
-      anchoM: true,
-      precioBase: true,
-      precioSeleccionadoId: true,
-      precios: {
-        where: { estado: "vigente" },
-        orderBy: { precio: "asc" },
-        take: 1,
-        select: { id: true, precio: true },
-      },
-    },
+    select: { espesormm: true, altoM: true, anchoM: true },
   });
 
-  if (!insumo || !insumo.altoM || !insumo.anchoM) {
-    return { porMueble: [], totalCortes: 0, totalAhorro: 0, cortesReservados: 0, cantidadDisponible: cantidadRetazo, cantidadUsada: 0 };
+  if (!insumoRetazo || !insumoRetazo.altoM || !insumoRetazo.anchoM) {
+    return { porMueble: [], totalCortes: 0, totalAhorro: 0, cantidadDisponible: cantidadRetazo, cantidadUsada: 0 };
   }
 
-  // Precio de referencia
-  let precioInsumo = 0;
-  if (insumo.precioSeleccionadoId) {
-    const sel = insumo.precios.find((p) => p.id === insumo.precioSeleccionadoId);
-    if (sel) precioInsumo = Number(sel.precio);
-  }
-  if (precioInsumo === 0 && insumo.precios[0]) precioInsumo = Number(insumo.precios[0].precio);
-  if (precioInsumo === 0 && insumo.precioBase != null) precioInsumo = Number(insumo.precioBase);
+  // Buscar todos los insumos compatibles (mismo espesormm si existe, o exacto si no)
+  // Un retazo de 18mm puede servir para cualquier pieza especificada en 18mm, sin importar el tipo exacto
+  const insumosFiltro = insumoRetazo.espesormm != null
+    ? await prisma.insumo.findMany({
+        where: {
+          espesormm: insumoRetazo.espesormm,
+          altoM: { not: null },
+          anchoM: { not: null },
+        },
+        select: {
+          id: true,
+          descripcion: true,
+          altoM: true,
+          anchoM: true,
+          precioBase: true,
+          precioSeleccionadoId: true,
+          precios: {
+            where: { estado: "vigente" },
+            orderBy: { precio: "asc" },
+            take: 1,
+            select: { id: true, precio: true },
+          },
+        },
+      })
+    : await prisma.insumo.findMany({
+        where: { id: insumoId },
+        select: {
+          id: true,
+          descripcion: true,
+          altoM: true,
+          anchoM: true,
+          precioBase: true,
+          precioSeleccionadoId: true,
+          precios: {
+            where: { estado: "vigente" },
+            orderBy: { precio: "asc" },
+            take: 1,
+            select: { id: true, precio: true },
+          },
+        },
+      });
 
-  // Materiales del despiece de muebles activos con este insumo
+  if (insumosFiltro.length === 0) {
+    return { porMueble: [], totalCortes: 0, totalAhorro: 0, cantidadDisponible: cantidadRetazo, cantidadUsada: 0 };
+  }
+
+  const insumoDataMap = new Map(insumosFiltro.map((i) => [i.id, i]));
+  const insumoIds = insumosFiltro.map((i) => i.id);
+
+  // Materiales del despiece de muebles activos con insumos compatibles
   const materiales = await prisma.despieceMaterial.findMany({
-    where: { insumoId, mueble: { estado: "activo" }, medidas: { not: null } },
+    where: {
+      insumoId: { in: insumoIds },
+      mueble: { estado: "activo" },
+      medidas: { not: null },
+    },
     select: {
       id: true,
       muebleId: true,
+      insumoId: true,
       productoNombre: true,
       medidas: true,
       cantidad: true,
       mueble: { select: { nombre: true, codigo: true } },
-      reservasResiduales: {
-        select: { materialResidualId: true, cantidadAsignada: true },
-      },
     },
   });
 
-  const coincidencias: CorteCoincidente[] = [];
+  // Asignaciones actuales de este residual por mueble
+  const asignacionesActuales = residualId
+    ? await prisma.reservaResidual.findMany({
+        where: { materialResidualId: residualId },
+        select: { muebleId: true, cantidadAsignada: true },
+      })
+    : [];
+  const asignacionMap = new Map<string, number>(
+    asignacionesActuales.map((a) => [a.muebleId, a.cantidadAsignada])
+  );
+
+  // Agrupar cortes por mueble
+  const porMuebleMap = new Map<string, {
+    muebleNombre: string;
+    muebleCodigo: string;
+    cortes: CorteCoincidente[];
+  }>();
 
   for (const m of materiales) {
-    // Normalizar: reemplazar comas por puntos y recortar espacios
     const medidasNorm = (m.medidas ?? "").trim().replace(/,/g, ".");
     const match = medidasNorm.match(MEDIDAS_RE);
     if (!match) continue;
@@ -104,62 +163,57 @@ export async function compararResidual(
     const entraRotado = cutAlto <= retazoAnchoCm && cutAncho <= retazoAltoCm;
     if (!entraNormal && !entraRotado) continue;
 
+    // Calcular ahorro usando los datos del insumo especificado en el despiece
+    const insumoDespiece = m.insumoId ? insumoDataMap.get(m.insumoId) : undefined;
+    const altoPlaca = insumoDespiece?.altoM ?? insumoRetazo.altoM!;
+    const anchoPlaca = insumoDespiece?.anchoM ?? insumoRetazo.anchoM!;
+    const precio = insumoDespiece ? getPrecioInsumo(insumoDespiece) : 0;
+
     const pct = calcularPorcentajePlaca(
       cantidad, cutAlto, cutAncho,
-      insumo.altoM!, insumo.anchoM!, factorDesperdicio
+      altoPlaca, anchoPlaca, factorDesperdicio
     );
 
-    const reservaActual = residualId
-      ? m.reservasResiduales.find((r) => r.materialResidualId === residualId)
-      : undefined;
-    const cantidadEnActual = reservaActual?.cantidadAsignada ?? 0;
-    const cantidadEnOtros = m.reservasResiduales
-      .filter((r) => r.materialResidualId !== residualId)
-      .reduce((s, r) => s + r.cantidadAsignada, 0);
-
-    coincidencias.push({
+    const corte: CorteCoincidente = {
       despieceMaterialId: m.id,
-      muebleId: m.muebleId,
-      muebleNombre: m.mueble.nombre,
-      muebleCodigo: m.mueble.codigo,
       pieza: m.productoNombre,
+      insumoNombre: insumoDespiece?.descripcion ?? "",
       altoCm: cutAlto,
       anchoCm: cutAncho,
       cantidad,
       rotado: !entraNormal && entraRotado,
-      ahorroEstimado: calcularCostoMaterial(pct, precioInsumo),
-      cantidadEnActual,
-      cantidadEnOtros,
-      reservadoEnActual: cantidadEnActual > 0,
-    });
+      ahorroEstimado: calcularCostoMaterial(pct, precio),
+    };
+
+    if (!porMuebleMap.has(m.muebleId)) {
+      porMuebleMap.set(m.muebleId, {
+        muebleNombre: m.mueble.nombre,
+        muebleCodigo: m.mueble.codigo,
+        cortes: [],
+      });
+    }
+    porMuebleMap.get(m.muebleId)!.cortes.push(corte);
   }
 
-  // Agrupar por mueble
-  const porMuebleMap = new Map<string, CorteCoincidente[]>();
-  for (const c of coincidencias) {
-    if (!porMuebleMap.has(c.muebleId)) porMuebleMap.set(c.muebleId, []);
-    porMuebleMap.get(c.muebleId)!.push(c);
-  }
-
-  const porMueble = Array.from(porMuebleMap.entries())
-    .map(([muebleId, cortes]) => ({
+  const porMueble: ResultadoMueble[] = Array.from(porMuebleMap.entries())
+    .map(([muebleId, { muebleNombre, muebleCodigo, cortes }]) => ({
       muebleId,
-      muebleNombre: cortes[0].muebleNombre,
-      muebleCodigo: cortes[0].muebleCodigo,
+      muebleNombre,
+      muebleCodigo,
       cortes,
       ahorroTotal: cortes.reduce((s, c) => s + c.ahorroEstimado, 0),
+      cantidadAsignada: asignacionMap.get(muebleId) ?? 0,
     }))
     .sort((a, b) => b.ahorroTotal - a.ahorroTotal);
 
-  const cortesReservados = coincidencias.filter((c) => c.cantidadEnActual > 0).length;
-  const cantidadUsada = coincidencias.reduce((s, c) => s + c.cantidadEnActual, 0);
+  const cantidadUsada = asignacionesActuales.reduce((s, a) => s + a.cantidadAsignada, 0);
   const cantidadDisponible = cantidadRetazo + cantidadUsada;
+  const totalCortes = Array.from(porMuebleMap.values()).reduce((s, g) => s + g.cortes.length, 0);
 
   return {
     porMueble,
-    totalCortes: coincidencias.length,
-    totalAhorro: coincidencias.reduce((s, c) => s + c.ahorroEstimado, 0),
-    cortesReservados,
+    totalCortes,
+    totalAhorro: porMueble.reduce((s, g) => s + g.ahorroTotal, 0),
     cantidadDisponible,
     cantidadUsada,
   };

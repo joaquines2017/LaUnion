@@ -17,8 +17,8 @@ interface InsumoRef {
 
 interface ReservaRef {
   muebleId: string;
+  cantidadAsignada: number;
   mueble: { nombre: string; codigo: string };
-  despieceMaterial: { cantidad: string | number };
 }
 
 interface Residual {

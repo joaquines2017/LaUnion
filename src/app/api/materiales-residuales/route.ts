@@ -36,8 +36,8 @@ export async function GET(req: NextRequest) {
       reservas: {
         select: {
           muebleId: true,
+          cantidadAsignada: true,
           mueble: { select: { nombre: true, codigo: true } },
-          despieceMaterial: { select: { cantidad: true } },
         },
       },
     },
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
   }
 
   const item = await prisma.materialResidual.create({ data: parsed.data });

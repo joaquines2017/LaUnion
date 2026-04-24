@@ -26,11 +26,11 @@ export async function GET(
   return NextResponse.json(resultado);
 }
 
-// POST: set completo de asignaciones para este retazo.
-// Acepta lista de { despieceMaterialId, cantidad } — cantidad = 0 elimina la asignación.
+// POST: set completo de asignaciones para este retazo a nivel mueble.
+// Acepta lista de { muebleId, cantidad } — lista vacía elimina todas las asignaciones.
 const asignacionSchema = z.object({
   asignaciones: z.array(z.object({
-    despieceMaterialId: z.string().uuid(),
+    muebleId: z.string().uuid(),
     cantidad: z.number().int().min(1),
   })),
 });
@@ -48,14 +48,14 @@ export async function POST(
 
   const body = await req.json();
   const parsed = asignacionSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
 
   const { asignaciones } = parsed.data;
 
   // Cuántas piezas tenía asignadas este retazo antes del cambio
   const prevAsignaciones = await prisma.reservaResidual.findMany({
     where: { materialResidualId: id },
-    include: { despieceMaterial: { select: { cantidad: true } } },
+    select: { cantidadAsignada: true },
   });
   const prevTotal = prevAsignaciones.reduce((s, r) => s + r.cantidadAsignada, 0);
 
@@ -71,41 +71,6 @@ export async function POST(
     return NextResponse.json({ ok: true, reservadas: 0 });
   }
 
-  const despieceMaterialIds = asignaciones.map((a) => a.despieceMaterialId);
-
-  // Obtener los datos de cada corte (muebleId, cantidad total, asignaciones en otros retazos)
-  const materiales = await prisma.despieceMaterial.findMany({
-    where: { id: { in: despieceMaterialIds } },
-    select: {
-      id: true,
-      muebleId: true,
-      cantidad: true,
-      reservasResiduales: {
-        where: { materialResidualId: { not: id } },
-        select: { cantidadAsignada: true },
-      },
-    },
-  });
-
-  const materialMap = new Map(materiales.map((m) => [m.id, m]));
-
-  // Validar cada asignación individualmente
-  for (const a of asignaciones) {
-    const m = materialMap.get(a.despieceMaterialId);
-    if (!m) return NextResponse.json({ error: `Corte no encontrado: ${a.despieceMaterialId}` }, { status: 400 });
-
-    const cantidadTotal = Number(m.cantidad);
-    const enOtros = m.reservasResiduales.reduce((s, r) => s + r.cantidadAsignada, 0);
-    const maxDisponible = cantidadTotal - enOtros;
-
-    if (a.cantidad > maxDisponible) {
-      return NextResponse.json(
-        { error: `Solo quedan ${maxDisponible} pieza${maxDisponible !== 1 ? "s" : ""} disponibles para ese corte (otras asignaciones ya usan ${enOtros}).` },
-        { status: 400 }
-      );
-    }
-  }
-
   const newTotal = asignaciones.reduce((s, a) => s + a.cantidad, 0);
   const efectivoDisponible = residual.cantidad + prevTotal;
 
@@ -118,27 +83,18 @@ export async function POST(
 
   const delta = prevTotal - newTotal;
 
-  if (residual.cantidad + delta < 0) {
-    return NextResponse.json(
-      { error: `La asignación dejaría el stock en negativo.` },
-      { status: 400 }
-    );
-  }
-
   // Reemplazar atómicamente: eliminar las del retazo actual y crear las nuevas
   await prisma.$transaction([
     prisma.reservaResidual.deleteMany({ where: { materialResidualId: id } }),
-    ...asignaciones.map((a) => {
-      const m = materialMap.get(a.despieceMaterialId)!;
-      return prisma.reservaResidual.create({
+    ...asignaciones.map((a) =>
+      prisma.reservaResidual.create({
         data: {
           materialResidualId: id,
-          despieceMaterialId: a.despieceMaterialId,
-          muebleId: m.muebleId,
+          muebleId: a.muebleId,
           cantidadAsignada: a.cantidad,
         },
-      });
-    }),
+      })
+    ),
     prisma.materialResidual.update({
       where: { id },
       data: { cantidad: { increment: delta } },
