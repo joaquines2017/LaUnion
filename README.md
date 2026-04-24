@@ -4,11 +4,12 @@ Sistema web para calcular y gestionar precios de costo de muebles a partir de in
 
 ## Stack
 
-- **Next.js 16.2.3** (App Router, full-stack monolito)
+- **Next.js 16.2.3** (App Router, full-stack monolito, Turbopack)
 - **PostgreSQL 16** via Prisma ORM 5
-- **NextAuth.js v5** con autenticación por credenciales
+- **NextAuth.js v5** con autenticación por credenciales (JWT, 30 min)
 - **Tailwind CSS v4** + shadcn/ui
-- **ExcelJS** (exportación Excel) · **@react-pdf/renderer** (exportación PDF)
+- **ExcelJS** (exportación/importación Excel) · **@react-pdf/renderer** (exportación PDF)
+- **bcryptjs** (hash de contraseñas) · **zod** (validación)
 
 ---
 
@@ -81,11 +82,7 @@ Proxmox Host
 └── launion-app — Node.js 20 standalone  (ej. IP 192.168.1.11)
 ```
 
-Ambos contenedores deben estar en el mismo bridge de red (`vmbr0`) con IPs estáticas.
-
 ### 1. Configurar contenedor de base de datos (`launion-db`)
-
-En la consola del LXC, como root:
 
 ```bash
 git clone https://github.com/<usuario>/launion-app.git /tmp/launion
@@ -94,11 +91,7 @@ bash /tmp/launion/scripts/setup-db.sh \
   --app-ip "192.168.1.11"
 ```
 
-Este script instala PostgreSQL 16, crea el usuario `launion_user` y la base de datos `launion`, y configura el acceso desde la IP de la app.
-
 ### 2. Configurar contenedor de la app (`launion-app`)
-
-En la consola del LXC, como root:
 
 ```bash
 git clone https://github.com/<usuario>/launion-app.git /tmp/launion
@@ -109,11 +102,7 @@ bash /tmp/launion/scripts/setup-app.sh \
   --app-url "http://192.168.1.11:3000"
 ```
 
-Este script instala Node.js 20, clona el repo, hace el build, corre las migraciones, carga el seed y configura el servicio systemd que arranca la app automáticamente.
-
 ### 3. Actualizar a una nueva versión
-
-Desde el LXC `launion-app`:
 
 ```bash
 cd /opt/launion-app
@@ -127,47 +116,220 @@ sudo -u launion bash scripts/deploy.sh
 ```
 src/
 ├── app/
-│   ├── proxy.ts              # Auth middleware (Next.js 16)
-│   ├── api/                  # 20 endpoints REST
-│   └── (dashboard)/          # Rutas protegidas
-│       ├── page.tsx          # Dashboard
+│   ├── proxy.ts                      # Auth middleware (Next.js 16)
+│   ├── login/                        # Página de login
+│   ├── api/
+│   │   ├── auth/                     # NextAuth handlers
+│   │   ├── auditoria/                # GET log de auditoría (solo admin)
+│   │   ├── categorias-insumo/        # CRUD categorías de insumo
+│   │   ├── categorias-mueble/        # CRUD categorías de mueble
+│   │   ├── configuracion/            # GET/PATCH config global
+│   │   ├── importar/
+│   │   │   ├── route.ts              # POST importación masiva Excel
+│   │   │   └── plantilla/route.ts    # GET descarga plantilla .xlsx
+│   │   ├── insumos/                  # CRUD insumos
+│   │   ├── lista-corte/
+│   │   │   ├── route.ts              # GET lista de corte
+│   │   │   ├── excel/route.ts        # GET exportar Excel
+│   │   │   └── pdf/route.ts          # GET exportar PDF
+│   │   ├── materiales-residuales/    # CRUD retazos + comparación
+│   │   │   └── [id]/comparacion/     # GET análisis / POST asignar
+│   │   ├── muebles/
+│   │   │   └── [id]/
+│   │   │       ├── despiece/route.ts # GET/PUT despiece (guarda versión)
+│   │   │       ├── imagenes/         # POST/DELETE imágenes
+│   │   │       └── versiones/route.ts# GET historial / POST restaurar
+│   │   ├── precios/                  # POST upsert precio + cascada
+│   │   ├── proveedores/              # CRUD proveedores
+│   │   ├── reportes/
+│   │   │   ├── costos/               # GET exportar PDF/Excel costos
+│   │   │   └── despiece/[id]/        # GET PDF despiece por mueble
+│   │   ├── unidades-medida/          # CRUD unidades de medida
+│   │   └── usuarios/                 # CRUD usuarios (solo admin)
+│   └── (dashboard)/                  # Rutas protegidas (layout con Sidebar)
+│       ├── page.tsx                  # Dashboard
 │       ├── insumos/
 │       ├── proveedores/
 │       ├── muebles/
 │       ├── precios/
+│       ├── residuales/
+│       ├── lista-corte/
 │       ├── reportes/
+│       │   ├── costos/
+│       │   └── proveedores/
 │       ├── importar/
 │       └── configuracion/
+│           ├── page.tsx              # Config general
+│           ├── categorias-mueble/
+│           ├── categorias-insumo/
+│           ├── unidades-medida/
+│           ├── usuarios/             # Solo admin
+│           └── auditoria/            # Solo admin
 ├── components/
-│   ├── muebles/              # TabDespiece, TabInsumos, AutocompletarInsumo
-│   ├── insumos/              # FormInsumo, TablaPrecios, HistorialPrecios
-│   ├── precios/              # GestionPrecios, ModalRecalculo
-│   ├── proveedores/          # TablaPreciosProveedor
-│   ├── configuracion/        # GestionCatalogo, FormConfiguracion
-│   └── layout/               # Sidebar
+│   ├── configuracion/
+│   │   ├── FormConfiguracion.tsx
+│   │   ├── GestionCatalogo.tsx       # Reutilizable: categorías, unidades
+│   │   ├── GestionUsuarios.tsx       # CRUD usuarios con inline password reset
+│   │   └── PanelAuditoria.tsx        # Log con búsqueda y expansión
+│   ├── importar/
+│   │   └── PaginaImportar.tsx        # Upload + preview + plantilla
+│   ├── insumos/
+│   │   ├── FormInsumo.tsx
+│   │   ├── HistorialPrecios.tsx
+│   │   └── TablaPrecios.tsx
+│   ├── layout/
+│   │   └── Sidebar.tsx
+│   ├── muebles/
+│   │   ├── AutocompletarInsumo.tsx
+│   │   ├── DetalleMueble.tsx         # Tabs: datos / despiece / insumos + historial versiones
+│   │   ├── FormMueble.tsx
+│   │   ├── HistorialVersiones.tsx    # Panel colapsable con botón Restaurar
+│   │   ├── TabDespiece.tsx           # Grilla de materiales con medidas
+│   │   └── TabInsumos.tsx            # Grilla de insumos/gastos con cálculo % placa
+│   ├── precios/
+│   │   ├── GestionPrecios.tsx
+│   │   └── ModalRecalculo.tsx
+│   ├── proveedores/
+│   │   └── TablaPreciosProveedor.tsx
+│   ├── reportes/
+│   │   ├── BotonesExportacion.tsx
+│   │   ├── ListaCorte.tsx            # Componente PDF react-pdf
+│   │   ├── ReporteCostosPDF.tsx
+│   │   └── ReporteDespiece.tsx
+│   ├── residuales/
+│   │   ├── FormResidual.tsx
+│   │   ├── PanelComparacion.tsx      # Comparación individual de retazo
+│   │   ├── PanelComparacionMultiple.tsx # Comparación y asignación múltiple
+│   │   └── TablaResiduales.tsx
+│   ├── shared/
+│   │   ├── AccionesTabla.tsx
+│   │   ├── BotonEstado.tsx
+│   │   ├── FiltrosBusqueda.tsx
+│   │   └── PaginadorTabla.tsx
+│   └── ui/                           # shadcn/ui components
 └── lib/
-    ├── recalculo-cascada.ts  # Recálculo automático de costos en cascada
-    ├── calculo-costos.ts     # Cálculos de % placa y costos unitarios
-    └── prisma.ts             # Singleton PrismaClient
+    ├── auditoria.ts                  # registrarLog() — nunca rompe el flujo
+    ├── calculo-costos.ts
+    ├── comparacion-residuales.ts     # Algoritmo de matching retazos ↔ cortes
+    ├── formato.ts                    # formatearPrecio, formatearFecha, etc.
+    ├── importar-excel.ts             # Parser Excel multi-hoja
+    ├── lista-corte.ts                # getListaCorte(), sortFilas()
+    ├── prisma.ts                     # Singleton PrismaClient
+    ├── recalculo-cascada.ts          # Recálculo en cascada al cambiar precios
+    └── utils.ts
 prisma/
 ├── schema.prisma
 ├── migrations/
 └── seed.ts
-scripts/
-├── setup-db.sh               # Configuración inicial LXC base de datos
-├── setup-app.sh              # Configuración inicial LXC aplicación
-├── deploy.sh                 # Actualización de versión
-└── service/
-    └── launion.service       # Servicio systemd
 ```
+
+---
+
+## Modelo de datos
+
+### Entidades principales
+
+| Modelo | Descripción |
+|--------|-------------|
+| `Proveedor` | Proveedor con datos de contacto y estado activo/inactivo |
+| `CategoriaInsumo` / `CategoriaMueble` | Catálogos de categorías |
+| `UnidadMedida` | Catálogo de unidades (placa, metro, unidad, kilo, etc.) |
+| `Insumo` | Insumo con código, unidad de medida, dimensiones de placa y precio seleccionado |
+| `PrecioProveedor` | Precio vigente por par insumo-proveedor (unique constraint) |
+| `HistorialPrecio` | Registro inmutable de cada cambio de precio |
+| `Mueble` | Mueble con código manual, categoría y costo calculado |
+| `MuebleImagen` | Galería de imágenes por mueble |
+| `DespieceMaterial` | Fila de material en el despiece (placa, vidrio, MDF, etc.) con medidas |
+| `DespieceInsumo` | Fila de insumo/gasto en el despiece (tornillos, flete, etc.) |
+| `VersionDespiece` | Snapshot completo del despiece guardado en cada `PUT /despiece` |
+| `MaterialResidual` | Retazo disponible con dimensiones y stock |
+| `ReservaResidual` | Asignación de retazos a muebles con cantidad |
+| `Usuario` | Usuario del sistema con rol y password bcrypt |
+| `ConfiguracionGlobal` | Singleton: factor de desperdicio, moneda, vigencia de precios |
+| `LogAuditoria` | Registro de acciones (precios, muebles, despiece, usuarios) |
+
+### Roles de usuario
+
+| Rol | Permisos |
+|-----|----------|
+| `administrador` | Acceso total, gestión de usuarios y auditoría |
+| `operador` | Acceso a todas las funcionalidades operativas |
+| `lectura` | Solo visualización |
+
+---
 
 ## Funcionalidades
 
-- **Insumos:** catálogo con precios por proveedor, alertas de precios desactualizados, historial
-- **Gastos fijos:** insumos sin proveedor con precio base (electricidad, fletes, etc.)
-- **Proveedores:** tabla interactiva de precios con edición inline
-- **Muebles:** despiece con materiales (% placa automático) e insumos/gastos
-- **Recálculo en cascada:** al cambiar cualquier precio actualiza automáticamente todos los muebles
-- **Reportes:** lista de costos y comparativo de proveedores — exportar PDF/Excel
-- **Importación masiva:** carga de insumos y precios desde .xlsx con preview
-- **Configuración:** factor de desperdicio, vigencia de precios, categorías, unidades de medida
+### Catálogo de insumos
+- CRUD de insumos con categoría, unidad de medida y dimensiones de placa
+- Precios por proveedor con historial de cambios
+- Selección manual de precio activo o uso del mínimo vigente
+- Alertas de precios desactualizados (configurable en días)
+
+### Proveedores
+- CRUD con tabla interactiva de precios por insumo y edición inline
+
+### Muebles y despiece
+- CRUD con código manual (ej: `05-147-000`), categoría e imágenes
+- **Tab Despiece:** materiales principales con medidas (ancho×alto en cm), cálculo automático de % placa usado y costo
+- **Tab Insumos:** insumos y gastos con cálculo unitario o % placa
+- Costo total calculado automáticamente al guardar
+- **Historial de versiones:** cada guardado genera un snapshot; panel colapsable con botón Restaurar (el estado actual se resguarda antes de restaurar)
+
+### Recálculo en cascada
+Al modificar el precio de un insumo, todos los muebles que lo usan recalculan su costo automáticamente.
+
+### Materiales residuales (retazos)
+- Registro de retazos con insumo, dimensiones y stock
+- Filtros por insumo, estado y disponibilidad
+- Comparación individual: detecta qué cortes del despiece encajan en el retazo (con rotación)
+- **Comparación múltiple:** panel de asignación de varios retazos en simultáneo con barra de capacidad
+- Asignación de retazos a muebles con cantidad parcial
+
+### Lista de Corte
+- Tabla consolidada de todos los cortes del despiece de muebles activos
+- Agrupación de piezas idénticas entre muebles distintos
+- Búsqueda por pieza, insumo o mueble
+- Ordenamiento multi-columna clickeable
+- Exportar a Excel y PDF (A4 apaisado con tabla formateada)
+
+### Reportes
+- **Lista de costos:** tabla paginada de muebles con costo, filtros por categoría, exportar Excel/PDF y PDF de despiece por mueble
+- **Comparativo de proveedores:** matriz insumo × proveedor con precio mínimo resaltado
+
+### Importación masiva
+- Upload de archivo `.xlsx` con múltiples hojas
+- Vista previa antes de confirmar (contadores por entidad + errores por fila)
+- Descarga de plantilla Excel con todas las hojas y columnas documentadas
+- Hojas soportadas: `Proveedores`, `CatInsumos`, `Insumos`, `Precios`, `CatMuebles`, `Muebles`, `DespiMat`, `DespiInsumos`, `Residuales`
+
+### Administración (solo administradores)
+- **Gestión de usuarios:** crear, editar rol/estado, resetear contraseña, eliminar (con protección contra borrar el último admin o el propio usuario)
+- **Log de auditoría:** registro de precios, muebles, despiece y usuarios con datos antes/después, búsqueda y paginación
+- **Configuración global:** factor de desperdicio, moneda, días de vigencia de precios
+- **Catálogos:** categorías de muebles, categorías de insumos, unidades de medida
+
+---
+
+## Convenciones de desarrollo
+
+### APIs
+- Toda ruta requiere sesión activa (`auth()`) — retorna 401 si no está autenticado
+- Rutas de admin verifican `session.user.role === "administrador"` — retorna 403
+- Validación con `zod` antes de tocar la base de datos
+- Errores devuelven `{ error: string }` con el status HTTP correspondiente
+
+### Auditoría
+- Usar `registrarLog()` de `src/lib/auditoria.ts` para registrar acciones importantes
+- La función captura excepciones internamente: nunca rompe el flujo principal
+- Acciones registradas: `PRECIO_CREADO`, `PRECIO_MODIFICADO`, `MUEBLE_MODIFICADO`, `MUEBLE_DESACTIVADO`, `DESPIECE_MODIFICADO`, `DESPIECE_RESTAURADO`, `USUARIO_CREADO`, `USUARIO_MODIFICADO`, `USUARIO_ELIMINADO`
+
+### Versiones del despiece
+- Cada `PUT /api/muebles/[id]/despiece` guarda el estado anterior como `VersionDespiece`
+- El número de versión es incremental por mueble
+- Al restaurar, el estado actual también se versiona antes de sobreescribir
+
+### Componentes
+- Páginas en `(dashboard)/` son Server Components cuando no necesitan estado
+- Componentes interactivos usan `"use client"` y reciben datos iniciales por props
+- Toast con `sonner` para feedback de acciones
