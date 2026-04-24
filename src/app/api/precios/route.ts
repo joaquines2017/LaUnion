@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
 import { recalcularCascada } from "@/lib/recalculo-cascada";
+import { registrarLog } from "@/lib/auditoria";
 
 const precioSchema = z.object({
   insumoId: z.string().uuid(),
@@ -43,9 +44,24 @@ export async function POST(req: NextRequest) {
       where: { id: precioExistente.id },
       data: { precio, fechaVigencia: new Date() },
     });
+    registrarLog({
+      usuarioId: (session.user as { id?: string }).id ?? "sistema",
+      accion: "PRECIO_MODIFICADO",
+      entidad: "PrecioProveedor",
+      entidadId: result.id,
+      datosAnteriores: { precio: Number(precioExistente.precio) },
+      datosNuevos: { precio },
+    });
   } else {
     result = await prisma.precioProveedor.create({
       data: { insumoId, proveedorId, precio },
+    });
+    registrarLog({
+      usuarioId: (session.user as { id?: string }).id ?? "sistema",
+      accion: "PRECIO_CREADO",
+      entidad: "PrecioProveedor",
+      entidadId: result.id,
+      datosNuevos: { insumoId, proveedorId, precio },
     });
   }
 

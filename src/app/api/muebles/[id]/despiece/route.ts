@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
+import { registrarLog } from "@/lib/auditoria";
 
 const materialSchema = z.object({
   id: z.string().uuid().optional(),
@@ -101,14 +102,37 @@ export async function PUT(
   }
 
   const { materiales, insumos } = parsed.data;
+  const usuarioId = (session.user as { id?: string }).id ?? "sistema";
 
   // Calcular costo total del mueble
   const costoTotal =
     materiales.reduce((s, m) => s + m.costoTotal, 0) +
     insumos.reduce((s, i) => s + i.costoTotal, 0);
 
+  // Snapshot del despiece actual antes de reemplazar
+  const [materialesActuales, insumosActuales, ultimaVersion] = await Promise.all([
+    prisma.despieceMaterial.findMany({ where: { muebleId }, orderBy: { orden: "asc" } }),
+    prisma.despieceInsumo.findMany({ where: { muebleId }, orderBy: { orden: "asc" } }),
+    prisma.versionDespiece.findFirst({ where: { muebleId }, orderBy: { numeroVersion: "desc" } }),
+  ]);
+
+  const numeroVersion = (ultimaVersion?.numeroVersion ?? 0) + 1;
+
   // Reemplazar todo el despiece en una transacción
   await prisma.$transaction(async (tx) => {
+    // Guardar versión solo si ya había datos
+    if (materialesActuales.length > 0 || insumosActuales.length > 0) {
+      await tx.versionDespiece.create({
+        data: {
+          muebleId,
+          numeroVersion,
+          usuarioId,
+          snapshotMateriales: materialesActuales as object[],
+          snapshotInsumos: insumosActuales as object[],
+        },
+      });
+    }
+
     // Borrar los existentes
     await tx.despieceMaterial.deleteMany({ where: { muebleId } });
     await tx.despieceInsumo.deleteMany({ where: { muebleId } });
@@ -149,6 +173,14 @@ export async function PUT(
       where: { id: muebleId },
       data: { costoActual: new Decimal(costoTotal) },
     });
+  });
+
+  registrarLog({
+    usuarioId,
+    accion: "DESPIECE_MODIFICADO",
+    entidad: "Mueble",
+    entidadId: muebleId,
+    datosNuevos: { costoTotal, version: numeroVersion },
   });
 
   return NextResponse.json({ ok: true, costoTotal });

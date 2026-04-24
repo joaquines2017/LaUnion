@@ -18,6 +18,8 @@ import {
   DollarSign,
   Scissors,
   ListOrdered,
+  Users,
+  ClipboardList,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
@@ -63,6 +65,8 @@ const navItems: NavItem[] = [
       { href: "/configuracion/categorias-mueble",  label: "Categ. muebles",       icon: Tag },
       { href: "/configuracion/categorias-insumo",  label: "Categ. insumos",       icon: Layers },
       { href: "/configuracion/unidades-medida",    label: "Unidades de medida",   icon: Ruler },
+      { href: "/configuracion/usuarios",            label: "Usuarios",             icon: Users },
+      { href: "/configuracion/auditoria",          label: "Auditoría",            icon: ClipboardList },
     ],
   },
 ];

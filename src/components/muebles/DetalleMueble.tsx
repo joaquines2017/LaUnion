@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FormMueble } from "./FormMueble";
 import { TabDespiece, crearFilaMaterial, type FilaMaterial } from "./TabDespiece";
 import { TabInsumos, crearFilaInsumo, type FilaInsumo } from "./TabInsumos";
+import { HistorialVersiones } from "./HistorialVersiones";
 import { formatearPrecio, formatearNumeroInput, parsearNumero } from "@/lib/formato";
 import { toast } from "sonner";
 import type { InsumoOpcion } from "./AutocompletarInsumo";
@@ -146,6 +147,7 @@ export function DetalleMueble({
   );
 
   const [guardando, setGuardando] = useState(false);
+  const [versionKey, setVersionKey] = useState(0);
 
   const costoTotal = insumos.reduce((s, f) => s + f.costoTotal, 0);
 
@@ -189,6 +191,7 @@ export function DetalleMueble({
 
       if (res.ok) {
         toast.success("Despiece guardado");
+        setVersionKey((k) => k + 1);
         router.refresh();
       } else {
         const err = await res.json();
@@ -275,6 +278,12 @@ export function DetalleMueble({
           </Card>
         </TabsContent>
       </Tabs>
+
+      <HistorialVersiones
+        key={versionKey}
+        muebleId={mueble.id}
+        onRestaurado={() => { router.refresh(); }}
+      />
     </div>
   );
 }
