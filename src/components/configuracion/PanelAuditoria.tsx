@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { Search, X, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatearFecha } from "@/lib/formato";
@@ -137,8 +137,8 @@ export function PanelAuditoria() {
                 const abierto = expandido === log.id;
                 const colorClass = ACCION_COLORS[log.accion] ?? "text-muted-foreground bg-secondary border-border";
                 return (
-                  <>
-                    <tr key={log.id} className={abierto ? "bg-secondary/30" : undefined}>
+                  <Fragment key={log.id}>
+                    <tr className={abierto ? "bg-secondary/30" : undefined}>
                       <td className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                         {formatearFecha(new Date(log.fechaHora))}
                         <span className="block text-[10px] opacity-60">
@@ -192,7 +192,7 @@ export function PanelAuditoria() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })
             )}
