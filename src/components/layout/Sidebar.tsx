@@ -90,7 +90,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-[240px] min-h-screen bg-sidebar border-r border-sidebar-border">
+    <aside className="flex flex-col w-[240px] h-screen sticky top-0 bg-sidebar border-r border-sidebar-border">
       {/* Logo */}
       <div className="px-6 py-5 border-b border-sidebar-border">
         <span className="block text-lg font-bold text-white tracking-tight">
@@ -102,7 +102,7 @@ export function Sidebar() {
       </div>
 
       {/* Navegación */}
-      <nav className="flex-1 px-3 py-3">
+      <nav className="flex-1 px-3 py-3 overflow-y-auto">
         <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
           Menú
         </p>
