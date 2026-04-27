@@ -74,12 +74,16 @@ NEXTAUTH_URL="http://localhost:3000"
 
 ## Producción en Proxmox LXC
 
-La arquitectura usa **2 contenedores LXC** Ubuntu 22.04:
+La arquitectura usa **3 contenedores LXC** Ubuntu 22.04:
 
 ```
+Internet
+  │ (No-IP DDNS + port forwarding 80/443 en el router)
+  ▼
 Proxmox Host
-├── launion-db  — PostgreSQL 16 nativo   (ej. IP 192.168.1.10)
-└── launion-app — Node.js 20 standalone  (ej. IP 192.168.1.11)
+├── nginx-proxy — Nginx + SSL + Fail2ban  (ej. IP 192.168.1.9)  ← único expuesto
+├── launion-app — Node.js 20 standalone   (ej. IP 192.168.1.11) ← solo LAN
+└── launion-db  — PostgreSQL 16 nativo    (ej. IP 192.168.1.10) ← solo LAN
 ```
 
 ### 1. Configurar contenedor de base de datos (`launion-db`)
@@ -102,7 +106,31 @@ bash /tmp/launion/scripts/setup-app.sh \
   --app-url "http://192.168.1.11:3000"
 ```
 
-### 3. Actualizar a una nueva versión
+### 3. Configurar contenedor del reverse proxy (`nginx-proxy`)
+
+```bash
+git clone https://github.com/<usuario>/launion-app.git /tmp/launion
+bash /tmp/launion/scripts/setup-proxy.sh \
+  --dominio   "launion.ddns.net" \
+  --app-ip    "192.168.1.11" \
+  --noip-user "tu_usuario_noip" \
+  --noip-pass "tu_password_noip"
+```
+
+Este script instala Nginx, Certbot (SSL automático), Fail2ban, UFW y el cliente No-IP DDNS.
+
+### 4. Agregar una empresa nueva al proxy
+
+Cuando se suma una nueva empresa con su propio dominio:
+
+```bash
+# En el LXC nginx-proxy:
+bash /tmp/launion/scripts/agregar-empresa-proxy.sh \
+  --dominio "donjose.ddns.net" \
+  --app-ip  "192.168.1.11"
+```
+
+### 5. Actualizar a una nueva versión
 
 ```bash
 cd /opt/launion-app
