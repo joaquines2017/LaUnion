@@ -13,16 +13,41 @@ async function main() {
     create: { id: "1", factorDesperdicio: 1.10, moneda: "ARS", vigenciaPrecioDias: 30 },
   });
 
-  // ── Usuarios ────────────────────────────────────────────────────────────
+  // ── Superadmin ──────────────────────────────────────────────────────────
+  const superadminHash = await bcrypt.hash("superadmin1234", 12);
+  await prisma.usuario.upsert({
+    where: { email: "superadmin@launion.com" },
+    update: {},
+    create: {
+      nombreUsuario: "superadmin",
+      email: "superadmin@launion.com",
+      passwordHash: superadminHash,
+      rol: "superadmin",
+      empresaId: null,
+    },
+  });
+
+  // ── Empresa de ejemplo + admin ──────────────────────────────────────────
+  const empresaLaUnion = await prisma.empresa.upsert({
+    where: { id: "empresa-launion-seed" },
+    update: {},
+    create: {
+      id: "empresa-launion-seed",
+      nombre: "LaUnion",
+      estado: "activo",
+    },
+  });
+
   const adminHash = await bcrypt.hash("admin1234", 12);
   await prisma.usuario.upsert({
     where: { email: "admin@launion.com" },
-    update: {},
+    update: { empresaId: empresaLaUnion.id },
     create: {
       nombreUsuario: "admin",
       email: "admin@launion.com",
       passwordHash: adminHash,
       rol: "administrador",
+      empresaId: empresaLaUnion.id,
     },
   });
 

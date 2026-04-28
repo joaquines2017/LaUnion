@@ -7,8 +7,9 @@ export async function proxy(request: NextRequest) {
   const isLoggedIn = !!session;
   const pathname = request.nextUrl.pathname;
 
-  const isLoginPage = pathname === "/login";
-  const isApiAuth = pathname.startsWith("/api/auth");
+  const isLoginPage   = pathname === "/login";
+  const isApiAuth     = pathname.startsWith("/api/auth");
+  const isSuperadmin  = pathname.startsWith("/superadmin");
 
   if (isApiAuth) return NextResponse.next();
 
@@ -17,7 +18,20 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isLoggedIn && isLoginPage) {
-    return NextResponse.redirect(new URL("/", request.url));
+    const role = (session.user as { role?: string }).role;
+    return NextResponse.redirect(new URL(role === "superadmin" ? "/superadmin" : "/", request.url));
+  }
+
+  if (isLoggedIn) {
+    const role = (session.user as { role?: string }).role;
+    // Superadmin solo puede acceder a /superadmin y /api/superadmin
+    if (role === "superadmin" && !isSuperadmin && !pathname.startsWith("/api/superadmin")) {
+      return NextResponse.redirect(new URL("/superadmin", request.url));
+    }
+    // Usuarios de empresa NO pueden acceder a /superadmin
+    if (role !== "superadmin" && isSuperadmin) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
   }
 
   return NextResponse.next();

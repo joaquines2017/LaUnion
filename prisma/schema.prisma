@@ -186,6 +186,21 @@ model VersionDespiece {
   @@map("versiones_despiece")
 }
 
+// ─── Empresas (Multi-Tenancy) ─────────────────────────────────────────────────
+
+model Empresa {
+  id        String    @id @default(uuid())
+  nombre    String
+  logoUrl   String?
+  dominio   String?   // informativo: "mueblesm.ddns.net"
+  estado    String    @default("activo") // activo | inactivo
+  createdAt DateTime  @default(now())
+
+  usuarios  Usuario[]
+
+  @@map("empresas")
+}
+
 // ─── Usuarios y Seguridad ────────────────────────────────────────────────────
 
 model Usuario {
@@ -193,9 +208,12 @@ model Usuario {
   nombreUsuario String   @unique
   email         String   @unique
   passwordHash  String   // bcrypt hash
-  rol           String   @default("operador") // administrador | operador | lectura
+  rol           String   @default("operador") // superadmin | administrador | operador | lectura
   estado        String   @default("activo")
   createdAt     DateTime @default(now())
+
+  empresaId     String?
+  empresa       Empresa? @relation(fields: [empresaId], references: [id])
 
   @@map("usuarios")
 }
