@@ -1,10 +1,20 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-// Sin dominio verificado en Resend usar: onboarding@resend.dev
-const FROM = process.env.RESEND_FROM ?? "onboarding@resend.dev";
+// Transporter Gmail SMTP con App Password
+// En Google: Cuenta → Seguridad → Verificación en 2 pasos → Contraseñas de aplicación
+function crearTransporter() {
+  return nodemailer.createTransport({
+    host:   "smtp.gmail.com",
+    port:   465,
+    secure: true,
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  });
+}
 
-export async function enviarPasswordInicial(opts: {
+function buildHtml(opts: {
   email: string;
   nombreUsuario: string;
   nombreEmpresa: string;
@@ -12,8 +22,7 @@ export async function enviarPasswordInicial(opts: {
   dominio?: string | null;
 }) {
   const url = opts.dominio ? `https://${opts.dominio}` : process.env.NEXTAUTH_URL ?? "";
-
-  const html = `
+  return `
 <!DOCTYPE html>
 <html lang="es">
 <head><meta charset="utf-8"/></head>
@@ -30,7 +39,6 @@ export async function enviarPasswordInicial(opts: {
             Tu cuenta de administrador fue creada para la empresa <strong>${opts.nombreEmpresa}</strong>.
             A continuación tus credenciales de acceso:
           </p>
-
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#F8F9FA;border:1px solid #E0E3EA;border-radius:6px;margin-bottom:24px;">
             <tr>
               <td style="padding:12px 16px;color:#888;font-size:13px;width:110px;">Email</td>
@@ -45,11 +53,9 @@ export async function enviarPasswordInicial(opts: {
               <td style="padding:12px 16px;"><a href="${url}" style="color:#1976D2;">${url}</a></td>
             </tr>` : ""}
           </table>
-
           <p style="color:#e53935;font-size:13px;background:#FFF3CD;border:1px solid #FFC107;border-radius:4px;padding:10px 14px;margin:0 0 24px;">
             ⚠ Por seguridad, cambiá tu contraseña la primera vez que ingreses.
           </p>
-
           ${url ? `<p style="text-align:center;margin:0 0 8px;">
             <a href="${url}" style="display:inline-block;background:#1A2035;color:#fff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:14px;font-weight:bold;">
               Ingresar al sistema
@@ -66,11 +72,20 @@ export async function enviarPasswordInicial(opts: {
   </table>
 </body>
 </html>`;
+}
 
-  await resend.emails.send({
-    from: FROM,
-    to:   opts.email,
+export async function enviarPasswordInicial(opts: {
+  email: string;
+  nombreUsuario: string;
+  nombreEmpresa: string;
+  password: string;
+  dominio?: string | null;
+}) {
+  const transporter = crearTransporter();
+  await transporter.sendMail({
+    from:    `"LaUnion Sistema" <${process.env.GMAIL_USER}>`,
+    to:      opts.email,
     subject: `Tus credenciales para ${opts.nombreEmpresa} — LaUnion`,
-    html,
+    html:    buildHtml(opts),
   });
 }
