@@ -29,8 +29,13 @@ export function FormNuevaEmpresa() {
       body: JSON.stringify(form),
     });
     if (res.ok) {
+      const data = await res.json();
+      if (data.emailError) {
+        toast.warning(`Empresa creada, pero el email no se envió: ${data.emailError}`);
+      } else {
+        toast.success("Empresa creada — contraseña enviada por email");
+      }
       setExitoso(true);
-      toast.success("Empresa creada — contraseña enviada por email");
       router.refresh();
     } else {
       const err = await res.json();

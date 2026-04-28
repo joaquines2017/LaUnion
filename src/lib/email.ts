@@ -1,7 +1,8 @@
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.RESEND_FROM ?? "noreply@resend.dev";
+// Sin dominio verificado en Resend usar: onboarding@resend.dev
+const FROM = process.env.RESEND_FROM ?? "onboarding@resend.dev";
 
 export async function enviarPasswordInicial(opts: {
   email: string;

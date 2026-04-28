@@ -68,7 +68,8 @@ export async function POST(req: NextRequest) {
     return emp;
   });
 
-  // Enviar email (no bloquea si falla)
+  // Enviar email — devuelve advertencia si falla pero no bloquea la creación
+  let emailError: string | null = null;
   try {
     await enviarPasswordInicial({
       email:         adminEmail,
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("Error enviando email:", err);
+    emailError = err instanceof Error ? err.message : "Error desconocido al enviar email";
   }
 
   registrarLog({
@@ -89,5 +91,5 @@ export async function POST(req: NextRequest) {
     datosNuevos: { nombre, dominio, adminEmail },
   });
 
-  return NextResponse.json(empresa, { status: 201 });
+  return NextResponse.json({ ...empresa, emailError }, { status: 201 });
 }
