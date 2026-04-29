@@ -9,7 +9,7 @@ Sistema web para calcular y gestionar precios de costo de muebles a partir de in
 - **NextAuth.js v5** con autenticación por credenciales (JWT, 30 min)
 - **Tailwind CSS v4** + shadcn/ui
 - **ExcelJS** (exportación/importación Excel) · **@react-pdf/renderer** (exportación PDF)
-- **bcryptjs** (hash de contraseñas) · **zod** (validación)
+- **nodemailer** (email via Gmail SMTP) · **bcryptjs** (hash de contraseñas) · **zod** (validación)
 
 ---
 
@@ -43,8 +43,14 @@ npm run db:seed
 npm run dev
 ```
 
-La app queda disponible en `http://localhost:3000`.  
-**Credenciales por defecto:** `admin@launion.com` / `admin1234`
+La app queda disponible en `http://localhost:3000`.
+
+**Credenciales por defecto (seed):**
+
+| Email | Contraseña | Rol | Panel |
+|-------|-----------|-----|-------|
+| `superadmin@launion.com` | `superadmin1234` | superadmin | `/superadmin` — gestión de empresas |
+| `admin@launion.com` | `admin1234` | administrador | `/` — dashboard operativo |
 
 ### Variables de entorno (`.env`)
 
@@ -53,6 +59,11 @@ DATABASE_URL="postgresql://usuario:password@localhost:5432/launion"
 AUTH_SECRET="generado-con-openssl-rand-base64-32"
 AUTH_TRUST_HOST=true
 NEXTAUTH_URL="http://localhost:3000"
+
+# Email — Gmail SMTP con App Password
+# Google Account → Seguridad → Verificación en 2 pasos → Contraseñas de aplicación
+GMAIL_USER="tu-cuenta@gmail.com"
+GMAIL_APP_PASSWORD="xxxx xxxx xxxx xxxx"
 ```
 
 ### Scripts disponibles
@@ -172,8 +183,20 @@ src/
 │   │   ├── reportes/
 │   │   │   ├── costos/               # GET exportar PDF/Excel costos
 │   │   │   └── despiece/[id]/        # GET PDF despiece por mueble
+│   │   ├── superadmin/
+│   │   │   └── empresas/
+│   │   │       ├── route.ts          # GET lista / POST crear empresa + admin
+│   │   │       └── [id]/
+│   │   │           ├── route.ts      # PATCH editar / DELETE desactivar
+│   │   │           ├── admin/route.ts# GET/PATCH editar admin / POST resetear contraseña
+│   │   │           └── logo/route.ts # POST subir logo
 │   │   ├── unidades-medida/          # CRUD unidades de medida
-│   │   └── usuarios/                 # CRUD usuarios (solo admin)
+│   │   └── usuarios/                 # CRUD usuarios (solo admin de empresa)
+│   ├── (superadmin)/                 # Panel exclusivo del superadmin
+│   │   ├── layout.tsx                # Layout con sidebar propio
+│   │   └── superadmin/
+│   │       ├── page.tsx              # Lista de empresas
+│   │       └── nueva/page.tsx        # Formulario nueva empresa
 │   └── (dashboard)/                  # Rutas protegidas (layout con Sidebar)
 │       ├── page.tsx                  # Dashboard
 │       ├── insumos/
@@ -191,8 +214,8 @@ src/
 │           ├── categorias-mueble/
 │           ├── categorias-insumo/
 │           ├── unidades-medida/
-│           ├── usuarios/             # Solo admin
-│           └── auditoria/            # Solo admin
+│           ├── usuarios/             # Solo admin de empresa
+│           └── auditoria/            # Solo admin de empresa
 ├── components/
 │   ├── configuracion/
 │   │   ├── FormConfiguracion.tsx
@@ -234,14 +257,19 @@ src/
 │   │   ├── BotonEstado.tsx
 │   │   ├── FiltrosBusqueda.tsx
 │   │   └── PaginadorTabla.tsx
+│   ├── superadmin/
+│   │   ├── TablaEmpresas.tsx         # Lista editable + panel admin expandible
+│   │   └── FormNuevaEmpresa.tsx      # Alta de empresa con envío de credenciales
 │   └── ui/                           # shadcn/ui components
 └── lib/
     ├── auditoria.ts                  # registrarLog() — nunca rompe el flujo
     ├── calculo-costos.ts
     ├── comparacion-residuales.ts     # Algoritmo de matching retazos ↔ cortes
+    ├── email.ts                      # enviarPasswordInicial() — Gmail SMTP via nodemailer
     ├── formato.ts                    # formatearPrecio, formatearFecha, etc.
     ├── importar-excel.ts             # Parser Excel multi-hoja
     ├── lista-corte.ts                # getListaCorte(), sortFilas()
+    ├── password.ts                   # generarPasswordSeguro() con crypto.getRandomValues
     ├── prisma.ts                     # Singleton PrismaClient
     ├── recalculo-cascada.ts          # Recálculo en cascada al cambiar precios
     └── utils.ts
@@ -259,6 +287,7 @@ prisma/
 
 | Modelo | Descripción |
 |--------|-------------|
+| `Empresa` | Empresa cliente con nombre, logo, dominio informativo y estado |
 | `Proveedor` | Proveedor con datos de contacto y estado activo/inactivo |
 | `CategoriaInsumo` / `CategoriaMueble` | Catálogos de categorías |
 | `UnidadMedida` | Catálogo de unidades (placa, metro, unidad, kilo, etc.) |
@@ -278,11 +307,14 @@ prisma/
 
 ### Roles de usuario
 
-| Rol | Permisos |
-|-----|----------|
-| `administrador` | Acceso total, gestión de usuarios y auditoría |
-| `operador` | Acceso a todas las funcionalidades operativas |
-| `lectura` | Solo visualización |
+| Rol | Permisos | Panel |
+|-----|----------|-------|
+| `superadmin` | Gestión de empresas del sistema (crear, editar, desactivar, resetear credenciales) | `/superadmin` |
+| `administrador` | Acceso total dentro de su empresa: usuarios, auditoría, configuración | `/` |
+| `operador` | Acceso a todas las funcionalidades operativas | `/` |
+| `lectura` | Solo visualización | `/` |
+
+> El `superadmin` no pertenece a ninguna empresa (`empresaId = null`). Los demás roles siempre pertenecen a una empresa.
 
 ---
 
@@ -331,7 +363,16 @@ Al modificar el precio de un insumo, todos los muebles que lo usan recalculan su
 - Descarga de plantilla Excel con todas las hojas y columnas documentadas
 - Hojas soportadas: `Proveedores`, `CatInsumos`, `Insumos`, `Precios`, `CatMuebles`, `Muebles`, `DespiMat`, `DespiInsumos`, `Residuales`
 
-### Administración (solo administradores)
+### Superadmin — gestión de empresas (`/superadmin`)
+- Panel exclusivo accesible solo con rol `superadmin`
+- **Crear empresa:** nombre, dominio (informativo), logo + usuario administrador inicial
+- Al crear: genera contraseña segura automáticamente y la envía por email (Gmail SMTP)
+- **Editar empresa:** nombre, dominio, estado (activo/inactivo)
+- **Panel de admin por empresa:** editar nombre de usuario, email y contraseña del administrador
+- **Resetear y reenviar credenciales:** genera nueva contraseña y la envía por email
+- Desactivar empresa desactiva también a todos sus usuarios
+
+### Administración (solo rol administrador de empresa)
 - **Gestión de usuarios:** crear, editar rol/estado, resetear contraseña, eliminar (con protección contra borrar el último admin o el propio usuario)
 - **Log de auditoría:** registro de precios, muebles, despiece y usuarios con datos antes/después, búsqueda y paginación
 - **Configuración global:** factor de desperdicio, moneda, días de vigencia de precios
@@ -343,14 +384,20 @@ Al modificar el precio de un insumo, todos los muebles que lo usan recalculan su
 
 ### APIs
 - Toda ruta requiere sesión activa (`auth()`) — retorna 401 si no está autenticado
-- Rutas de admin verifican `session.user.role === "administrador"` — retorna 403
+- Rutas de empresa-admin verifican `role === "administrador"` — retorna 403
+- Rutas de superadmin verifican `role === "superadmin"` — retorna 403
 - Validación con `zod` antes de tocar la base de datos
 - Errores devuelven `{ error: string }` con el status HTTP correspondiente
+
+### Email (Gmail SMTP)
+- Función `enviarPasswordInicial()` en `src/lib/email.ts` usa nodemailer con Gmail SMTP
+- Requiere variables `GMAIL_USER` y `GMAIL_APP_PASSWORD` (App Password de Google, no la contraseña normal)
+- El envío nunca bloquea el flujo: si falla, la operación continúa y devuelve `emailError` en la respuesta
 
 ### Auditoría
 - Usar `registrarLog()` de `src/lib/auditoria.ts` para registrar acciones importantes
 - La función captura excepciones internamente: nunca rompe el flujo principal
-- Acciones registradas: `PRECIO_CREADO`, `PRECIO_MODIFICADO`, `MUEBLE_MODIFICADO`, `MUEBLE_DESACTIVADO`, `DESPIECE_MODIFICADO`, `DESPIECE_RESTAURADO`, `USUARIO_CREADO`, `USUARIO_MODIFICADO`, `USUARIO_ELIMINADO`
+- Acciones registradas: `PRECIO_CREADO/MODIFICADO`, `MUEBLE_MODIFICADO/DESACTIVADO`, `DESPIECE_MODIFICADO/RESTAURADO`, `USUARIO_CREADO/MODIFICADO/ELIMINADO`, `EMPRESA_CREADA/MODIFICADA/DESACTIVADA`, `ADMIN_EMPRESA_MODIFICADO`, `CREDENCIALES_REENVIADAS`
 
 ### Versiones del despiece
 - Cada `PUT /api/muebles/[id]/despiece` guarda el estado anterior como `VersionDespiece`
@@ -358,6 +405,7 @@ Al modificar el precio de un insumo, todos los muebles que lo usan recalculan su
 - Al restaurar, el estado actual también se versiona antes de sobreescribir
 
 ### Componentes
-- Páginas en `(dashboard)/` son Server Components cuando no necesitan estado
+- Páginas en `(dashboard)/` y `(superadmin)/` son Server Components cuando no necesitan estado
 - Componentes interactivos usan `"use client"` y reciben datos iniciales por props
 - Toast con `sonner` para feedback de acciones
+- Fragmentos en listas de tabla: usar `<Fragment key={...}>` en lugar de `<>` para evitar warnings de React
