@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generarPasswordSeguro } from "@/lib/password";
+import { generarPasswordSeguro, passwordSchema } from "@/lib/password";
 
 const CHARS_VALIDOS = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
 
@@ -42,5 +42,23 @@ describe("generarPasswordSeguro", () => {
 
   it("no genera string vacío", () => {
     expect(generarPasswordSeguro()).toBeTruthy();
+  });
+});
+
+describe("passwordSchema (RNFS-006)", () => {
+  it("rechaza contraseñas de menos de 8 caracteres", () => {
+    expect(passwordSchema.safeParse("Abc123!").success).toBe(false);
+  });
+
+  it("rechaza contraseñas sin número ni símbolo", () => {
+    expect(passwordSchema.safeParse("abcdefgh").success).toBe(false);
+  });
+
+  it("acepta contraseñas con 8+ caracteres y al menos un número", () => {
+    expect(passwordSchema.safeParse("abcdefg1").success).toBe(true);
+  });
+
+  it("acepta contraseñas con 8+ caracteres y al menos un símbolo", () => {
+    expect(passwordSchema.safeParse("abcdefg!").success).toBe(true);
   });
 });

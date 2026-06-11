@@ -4,11 +4,12 @@ import { auth } from "@/lib/auth";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { registrarLog } from "@/lib/auditoria";
+import { passwordSchema } from "@/lib/password";
 
 const crearSchema = z.object({
   nombreUsuario: z.string().min(2, "Mínimo 2 caracteres"),
   email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Mínimo 6 caracteres"),
+  password: passwordSchema,
   rol: z.enum(["administrador", "operador", "lectura"]),
 });
 

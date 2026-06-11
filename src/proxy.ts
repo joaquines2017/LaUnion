@@ -9,9 +9,11 @@ export async function proxy(request: NextRequest) {
 
   const isLoginPage   = pathname === "/login";
   const isApiAuth     = pathname.startsWith("/api/auth");
+  const isHealth      = pathname === "/api/health";
   const isSuperadmin  = pathname.startsWith("/superadmin");
 
-  if (isApiAuth) return NextResponse.next();
+  // RFO-003: el health check debe responder sin sesión (monitoreo, deploy)
+  if (isApiAuth || isHealth) return NextResponse.next();
 
   if (!isLoggedIn && !isLoginPage) {
     return NextResponse.redirect(new URL("/login", request.url));

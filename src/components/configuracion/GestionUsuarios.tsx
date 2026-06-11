@@ -149,7 +149,7 @@ export function GestionUsuarios({ usuarios: usuariosIniciales, sesionId }: Props
           />
           <Input
             type="password"
-            placeholder="Contraseña (mín. 6 caracteres) *"
+            placeholder="Contraseña (mín. 8 caracteres, 1 número o símbolo) *"
             value={form.password}
             onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
             required
@@ -292,7 +292,7 @@ export function GestionUsuarios({ usuarios: usuariosIniciales, sesionId }: Props
                         {mostrarPassword && (
                           <Input
                             type="password"
-                            placeholder="Nueva contraseña (dejar vacío = sin cambios)"
+                            placeholder="Nueva contraseña (mín. 8, 1 número o símbolo; vacío = sin cambios)"
                             value={editForm.password ?? ""}
                             onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))}
                             className="h-7 text-sm w-52"

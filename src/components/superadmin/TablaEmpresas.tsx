@@ -349,7 +349,7 @@ export function TablaEmpresas({ empresas: inicial }: Props) {
                                 {mostrarPassword ? (
                                   <Input
                                     type="password"
-                                    placeholder="Nueva contraseña (mín. 6)"
+                                    placeholder="Nueva contraseña (mín. 8, 1 número o símbolo)"
                                     value={adminEdit.password ?? ""}
                                     onChange={(ev) => setAdminEdit((p) => ({ ...p, password: ev.target.value }))}
                                     className="h-8 text-sm"

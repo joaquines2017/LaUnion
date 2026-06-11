@@ -4,6 +4,11 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
+// RNFS-006: la política de 8 caracteres + complejidad se exige al crear o
+// cambiar contraseñas (ver src/lib/password.ts). Aquí se mantiene un mínimo
+// más bajo para no bloquear el login de cuentas existentes creadas antes de
+// esta política; la seguridad del login se refuerza con bcrypt + rate
+// limiting (RNFS-002), no con la validación de formato del input.
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),

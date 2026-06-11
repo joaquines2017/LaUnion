@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { generarPasswordSeguro } from "@/lib/password";
 import { enviarPasswordInicial } from "@/lib/email";
 import { registrarLog } from "@/lib/auditoria";
+import { passwordSchema } from "@/lib/password";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -29,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 const editarAdminSchema = z.object({
   nombreUsuario: z.string().min(2).optional(),
   email:         z.string().email().optional(),
-  password:      z.string().min(6).optional(),
+  password:      passwordSchema.optional(),
 });
 
 // PATCH — editar datos del admin

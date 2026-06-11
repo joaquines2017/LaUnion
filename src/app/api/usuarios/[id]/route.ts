@@ -4,13 +4,14 @@ import { auth } from "@/lib/auth";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { registrarLog } from "@/lib/auditoria";
+import { passwordSchema } from "@/lib/password";
 
 const editarSchema = z.object({
   nombreUsuario: z.string().min(2).optional(),
   email: z.string().email().optional(),
   rol: z.enum(["administrador", "operador", "lectura"]).optional(),
   estado: z.enum(["activo", "inactivo"]).optional(),
-  password: z.string().min(6).optional(),
+  password: passwordSchema.optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };
