@@ -34,9 +34,14 @@ sudo -u "$APP_USER" npx prisma migrate deploy
 echo "[4/5] Construyendo la aplicación..."
 sudo -u "$APP_USER" npm run build
 
-# Copiar archivos estáticos al directorio standalone
-cp -r .next/static .next/standalone/.next/static
-cp -r public .next/standalone/public 2>/dev/null || true
+# Copiar archivos estáticos al directorio standalone.
+# Se ejecuta como $APP_USER (no root) y se borra el destino antes de copiar:
+# si quedan archivos propiedad de root de un deploy anterior, el siguiente
+# `npm run build` (corrido como $APP_USER) falla con EACCES al no poder
+# borrarlos, y `cp -r origen destino` anida origen/origen si destino ya existe.
+sudo -u "$APP_USER" rm -rf .next/standalone/.next/static .next/standalone/public
+sudo -u "$APP_USER" cp -r .next/static .next/standalone/.next/static
+sudo -u "$APP_USER" cp -r public .next/standalone/public
 
 # ── 5. Reiniciar servicio ─────────────────────────────────────────────────────
 echo "[5/5] Reiniciando servicio..."
