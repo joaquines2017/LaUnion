@@ -37,7 +37,7 @@ el orden de la tabla.
 | ID | Descripción | Prioridad | Estado | Notas |
 |----|-------------|-----------|--------|-------|
 | RNFP-001 | Migración Prisma: índices en FKs críticas (despiece_materiales, despiece_insumos, insumos.categoriaId, insumos.precioSeleccionadoId, muebles.categoriaId, usuarios.empresaId, historial_precios.precioProveedorId, mueble_imagenes.muebleId, materiales_residuales.insumoId, versiones_despiece.muebleId). | ALTA | ✅ Completado | Migración `20260610120000_add_fk_indexes` aplicada en producción (12 índices verificados con `pg_indexes`). |
-| RNFP-002 | Optimizar `recalcularCascada`: reemplazar el bucle de queries individuales por fetch masivo + `Promise.all` + agrupación en memoria. | ALTA | ⬜ Pendiente | |
+| RNFP-002 | Optimizar `recalcularCascada`: reemplazar el bucle de queries individuales por fetch masivo + `Promise.all` + agrupación en memoria. | ALTA | ✅ Completado | `src/lib/recalculo-cascada.ts`: las actualizaciones de `despieceMaterial`/`despieceInsumo` ahora corren en paralelo con `Promise.all` (antes secuenciales en un `for...of`). El paso de recálculo de `costoActual` por mueble pasó de 3×N queries (findUnique + 2 findMany por mueble, dentro de un loop) a 3 queries totales (`findMany` con `id: { in: muebleIds }`) + agrupación en memoria con `Map`. Verificado en producción: se disparó el recálculo real vía `POST /api/precios` para un insumo usado en 3 muebles (18 líneas de despiece, incluye cálculo de placa), y `costoActual` resultante coincide exactamente con la suma de `costoTotal` de sus líneas (466962.94 = 28162.94 + 438800.00). |
 | RNFP-003 | Paginación (`?page=N&pageSize=M`) en `/api/insumos`, `/api/muebles`, `/api/proveedores`, `/api/log-auditoria`. | ALTA | ⬜ Pendiente | |
 | RNFP-004 | Cache de sesión en middleware (proxy.ts) para reducir llamadas de `auth()` a la BD. | MEDIA | ⬜ Pendiente | |
 
@@ -71,3 +71,8 @@ implementarse de forma incremental sin interrumpir el servicio.
   (se difieren RNFS-001 y RNFB-001/002/003 al final).
 - **2026-06-10**: Completados RFO-002, RNFP-001, RNFS-006, RFO-003, RNFS-003.
   53→57 tests OK. Migración de índices aplicada en producción.
+- **2026-06-11**: Completado RNFP-002 (recalcularCascada sin N+1). Además se
+  corrigió un bug preexistente en `scripts/deploy.sh` (el `cp -r` de
+  `public`/`static` al directorio `standalone` corría como root y anidaba
+  `public/public`, bloqueando el siguiente `npm run build` con EACCES); ahora
+  corre como `$APP_USER` y limpia el destino antes de copiar.
