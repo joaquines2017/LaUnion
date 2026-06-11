@@ -38,7 +38,7 @@ el orden de la tabla.
 |----|-------------|-----------|--------|-------|
 | RNFP-001 | Migración Prisma: índices en FKs críticas (despiece_materiales, despiece_insumos, insumos.categoriaId, insumos.precioSeleccionadoId, muebles.categoriaId, usuarios.empresaId, historial_precios.precioProveedorId, mueble_imagenes.muebleId, materiales_residuales.insumoId, versiones_despiece.muebleId). | ALTA | ✅ Completado | Migración `20260610120000_add_fk_indexes` aplicada en producción (12 índices verificados con `pg_indexes`). |
 | RNFP-002 | Optimizar `recalcularCascada`: reemplazar el bucle de queries individuales por fetch masivo + `Promise.all` + agrupación en memoria. | ALTA | ✅ Completado | `src/lib/recalculo-cascada.ts`: las actualizaciones de `despieceMaterial`/`despieceInsumo` ahora corren en paralelo con `Promise.all` (antes secuenciales en un `for...of`). El paso de recálculo de `costoActual` por mueble pasó de 3×N queries (findUnique + 2 findMany por mueble, dentro de un loop) a 3 queries totales (`findMany` con `id: { in: muebleIds }`) + agrupación en memoria con `Map`. Verificado en producción: se disparó el recálculo real vía `POST /api/precios` para un insumo usado en 3 muebles (18 líneas de despiece, incluye cálculo de placa), y `costoActual` resultante coincide exactamente con la suma de `costoTotal` de sus líneas (466962.94 = 28162.94 + 438800.00). |
-| RNFP-003 | Paginación (`?page=N&pageSize=M`) en `/api/insumos`, `/api/muebles`, `/api/proveedores`, `/api/log-auditoria`. | ALTA | ⬜ Pendiente | |
+| RNFP-003 | Paginación (`?page=N&pageSize=M`) en `/api/insumos`, `/api/muebles`, `/api/proveedores`, `/api/log-auditoria`. | ALTA | ✅ Completado | `/api/muebles` y `/api/auditoria` (el endpoint real de log de auditoría) ya tenían paginación completa (`page`/`pageSize`, `skip`/`take`, `count`). Se agregó el mismo patrón a `/api/insumos` y `/api/proveedores`: ambos ahora aceptan `?page=N&pageSize=M` y devuelven `{insumos, total}` / `{proveedores, total}` en lugar de un array plano. Se actualizó `AutocompletarInsumo.tsx` (único consumidor del GET de `/api/insumos`) para leer `data.insumos`. Verificado en producción: `tsc`/`eslint`/`npm test` (57/57) limpios, build y deploy OK, `GET /api/insumos?pageSize=3` y `GET /api/proveedores?pageSize=3` devuelven la nueva forma con `total` correcto, y `?buscar=Moldura&estado=activo` (usado por el autocompletado) sigue funcionando. |
 | RNFP-004 | Cache de sesión en middleware (proxy.ts) para reducir llamadas de `auth()` a la BD. | MEDIA | ⬜ Pendiente | |
 
 ## Funcionales — Multi-tenant (RFF)
@@ -77,3 +77,7 @@ implementarse de forma incremental sin interrumpir el servicio.
   `public/public`, bloqueando el siguiente `npm run build` con EACCES); ahora
   corre como `$APP_USER` y limpia el destino antes de copiar.
 - **2026-06-11**: Completado RFO-001 (transacción global en `/api/importar`).
+- **2026-06-11**: Completado RNFP-003 (paginación). `/api/muebles` y
+  `/api/auditoria` ya estaban paginados; se agregó el mismo patrón a
+  `/api/insumos` y `/api/proveedores` (`{insumos, total}` /
+  `{proveedores, total}`), actualizando `AutocompletarInsumo.tsx`.
