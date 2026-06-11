@@ -18,11 +18,12 @@ cd "$APP_DIR"
 
 # ── 1. Obtener últimos cambios ─────────────────────────────────────────────────
 echo "[1/5] Actualizando código..."
+sudo -u "$APP_USER" git checkout -- package.json package-lock.json
 sudo -u "$APP_USER" git pull origin main
 
 # ── 2. Instalar/actualizar dependencias ───────────────────────────────────────
 echo "[2/5] Instalando dependencias..."
-sudo -u "$APP_USER" npm ci
+sudo -u "$APP_USER" npm ci --legacy-peer-deps
 
 # ── 3. Regenerar cliente Prisma y aplicar migraciones ─────────────────────────
 echo "[3/5] Aplicando migraciones de base de datos..."

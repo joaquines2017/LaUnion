@@ -41,9 +41,9 @@ model Insumo {
   descripcion  String
   categoriaId  String
   unidadMedida String   @default("unidad") // unidad | metro | metroLineal | kilo | par | juego | rollo | placa
-  espesormm    Float?   // espesor en mm (para placas)
-  altoM        Float?   // alto estándar de placa en metros
-  anchoM       Float?   // ancho estándar de placa en metros
+  espesormm    Float? // espesor en mm (para placas)
+  altoM        Float? // alto estándar de placa en metros
+  anchoM       Float? // ancho estándar de placa en metros
   precioBase   Decimal? @db.Decimal(12, 2) // precio fijo para gastos sin proveedor
   estado       String   @default("activo")
   createdAt    DateTime @default(now())
@@ -57,6 +57,8 @@ model Insumo {
   despieceInsumos      DespieceInsumo[]
   materialesResiduales MaterialResidual[]
 
+  @@index([categoriaId])
+  @@index([precioSeleccionadoId])
   @@map("insumos")
 }
 
@@ -89,6 +91,7 @@ model HistorialPrecio {
 
   precioProveedor PrecioProveedor @relation(fields: [precioProveedorId], references: [id])
 
+  @@index([precioProveedorId])
   @@map("historial_precios")
 }
 
@@ -107,7 +110,7 @@ model Mueble {
   codigo      String   @unique // carga manual obligatoria, ej: "05-147-000"
   nombre      String
   categoriaId String
-  costoActual Decimal  @db.Decimal(12, 2) @default(0)
+  costoActual Decimal  @default(0) @db.Decimal(12, 2)
   estado      String   @default("activo")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -119,6 +122,7 @@ model Mueble {
   imagenes           MuebleImagen[]
   reservasResiduales ReservaResidual[]
 
+  @@index([categoriaId])
   @@map("muebles")
 }
 
@@ -126,48 +130,53 @@ model MuebleImagen {
   id        String   @id @default(uuid())
   muebleId  String
   filename  String
-  url       String   // ruta pública, ej: /uploads/muebles/<id>/<filename>
+  url       String // ruta pública, ej: /uploads/muebles/<id>/<filename>
   orden     Int      @default(0)
   createdAt DateTime @default(now())
 
   mueble Mueble @relation(fields: [muebleId], references: [id], onDelete: Cascade)
 
+  @@index([muebleId])
   @@map("mueble_imagenes")
 }
 
 // Pestaña "Despiece" — materiales principales (melamina, MDF, vidrio, etc.)
 model DespieceMaterial {
-  id             String   @id @default(uuid())
+  id             String  @id @default(uuid())
   muebleId       String
-  insumoId       String?  // null si el usuario escribió texto libre
-  proveedorId    String?  // null = usar precio de referencia (mínimo)
+  insumoId       String? // null si el usuario escribió texto libre
+  proveedorId    String? // null = usar precio de referencia (mínimo)
   productoNombre String
-  medidas        String?  // ej: "90x43", "100x45", "1,50 m"
-  cantidad       Decimal  @db.Decimal(10, 4)
-  costoUnitario  Decimal  @db.Decimal(12, 2)
-  costoTotal     Decimal  @db.Decimal(12, 2)
-  orden          Int      @default(0)
+  medidas        String? // ej: "90x43", "100x45", "1,50 m"
+  cantidad       Decimal @db.Decimal(10, 4)
+  costoUnitario  Decimal @db.Decimal(12, 2)
+  costoTotal     Decimal @db.Decimal(12, 2)
+  orden          Int     @default(0)
 
   mueble Mueble  @relation(fields: [muebleId], references: [id], onDelete: Cascade)
   insumo Insumo? @relation(fields: [insumoId], references: [id])
 
+  @@index([muebleId])
+  @@index([insumoId])
   @@map("despiece_materiales")
 }
 
 // Pestaña "Insumos" — insumos varios y gastos (tornillos, flete, etc.)
 model DespieceInsumo {
-  id            String   @id @default(uuid())
+  id            String  @id @default(uuid())
   muebleId      String
-  insumoId      String?  // null si el usuario escribió texto libre
+  insumoId      String? // null si el usuario escribió texto libre
   descripcion   String
-  cantidad      Decimal  @db.Decimal(10, 4)
-  costoUnitario Decimal  @db.Decimal(12, 2)
-  costoTotal    Decimal  @db.Decimal(12, 2)
-  orden         Int      @default(0)
+  cantidad      Decimal @db.Decimal(10, 4)
+  costoUnitario Decimal @db.Decimal(12, 2)
+  costoTotal    Decimal @db.Decimal(12, 2)
+  orden         Int     @default(0)
 
   mueble Mueble  @relation(fields: [muebleId], references: [id], onDelete: Cascade)
   insumo Insumo? @relation(fields: [insumoId], references: [id])
 
+  @@index([muebleId])
+  @@index([insumoId])
   @@map("despiece_insumos")
 }
 
@@ -178,25 +187,26 @@ model VersionDespiece {
   fecha              DateTime @default(now())
   usuarioId          String
   motivo             String?
-  snapshotMateriales Json     // snapshot completo de DespieceMaterial[]
-  snapshotInsumos    Json     // snapshot completo de DespieceInsumo[]
+  snapshotMateriales Json // snapshot completo de DespieceMaterial[]
+  snapshotInsumos    Json // snapshot completo de DespieceInsumo[]
 
   mueble Mueble @relation(fields: [muebleId], references: [id])
 
+  @@index([muebleId])
   @@map("versiones_despiece")
 }
 
 // ─── Empresas (Multi-Tenancy) ─────────────────────────────────────────────────
 
 model Empresa {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   nombre    String
   logoUrl   String?
-  dominio   String?   // informativo: "mueblesm.ddns.net"
-  estado    String    @default("activo") // activo | inactivo
-  createdAt DateTime  @default(now())
+  dominio   String? // informativo: "mueblesm.ddns.net"
+  estado    String   @default("activo") // activo | inactivo
+  createdAt DateTime @default(now())
 
-  usuarios  Usuario[]
+  usuarios Usuario[]
 
   @@map("empresas")
 }
@@ -207,14 +217,15 @@ model Usuario {
   id            String   @id @default(uuid())
   nombreUsuario String   @unique
   email         String   @unique
-  passwordHash  String   // bcrypt hash
+  passwordHash  String // bcrypt hash
   rol           String   @default("operador") // superadmin | administrador | operador | lectura
   estado        String   @default("activo")
   createdAt     DateTime @default(now())
 
-  empresaId     String?
-  empresa       Empresa? @relation(fields: [empresaId], references: [id])
+  empresaId String?
+  empresa   Empresa? @relation(fields: [empresaId], references: [id])
 
+  @@index([empresaId])
   @@map("usuarios")
 }
 
@@ -243,6 +254,7 @@ model MaterialResidual {
   insumo   Insumo            @relation(fields: [insumoId], references: [id])
   reservas ReservaResidual[]
 
+  @@index([insumoId])
   @@map("materiales_residuales")
 }
 
@@ -252,13 +264,13 @@ model ReservaResidual {
   id                 String   @id @default(uuid())
   materialResidualId String
   muebleId           String
-  cantidadAsignada   Int      @default(1)  // retazos de este material asignados a este mueble
+  cantidadAsignada   Int      @default(1) // retazos de este material asignados a este mueble
   createdAt          DateTime @default(now())
 
   materialResidual MaterialResidual @relation(fields: [materialResidualId], references: [id], onDelete: Cascade)
   mueble           Mueble           @relation(fields: [muebleId], references: [id], onDelete: Cascade)
 
-  @@unique([materialResidualId, muebleId])  // un retazo = una entrada por mueble
+  @@unique([materialResidualId, muebleId]) // un retazo = una entrada por mueble
   @@map("reservas_residual")
 }
 
@@ -266,7 +278,7 @@ model ReservaResidual {
 
 model ConfiguracionGlobal {
   id                 String @id @default("1") // singleton
-  factorDesperdicio  Float  @default(1.10)    // 1.10 = 10% desperdicio por defecto
+  factorDesperdicio  Float  @default(1.10) // 1.10 = 10% desperdicio por defecto
   moneda             String @default("ARS")
   vigenciaPrecioDias Int    @default(30)
 
@@ -277,8 +289,8 @@ model LogAuditoria {
   id              String   @id @default(uuid())
   fechaHora       DateTime @default(now())
   usuarioId       String
-  accion          String   // PRECIO_MODIFICADO | DESPIECE_MODIFICADO | RECALCULO_CASCADA | etc.
-  entidad         String   // Mueble | Insumo | PrecioProveedor | etc.
+  accion          String // PRECIO_MODIFICADO | DESPIECE_MODIFICADO | RECALCULO_CASCADA | etc.
+  entidad         String // Mueble | Insumo | PrecioProveedor | etc.
   entidadId       String
   datosAnteriores Json?
   datosNuevos     Json?

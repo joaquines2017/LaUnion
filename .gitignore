@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.test contiene solo valores mock, se versiona para CI/local (RFO-002)
+!env-test/.env.test
 
 # vercel
 .vercel
