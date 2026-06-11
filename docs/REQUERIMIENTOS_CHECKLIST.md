@@ -53,7 +53,7 @@ el orden de la tabla.
 
 | ID | Descripción | Prioridad | Estado | Notas |
 |----|-------------|-----------|--------|-------|
-| RFO-001 | Envolver `POST /api/importar` en una única `prisma.$transaction` global (evita datos inconsistentes ante fallos parciales). | ALTA | ⬜ Pendiente | |
+| RFO-001 | Envolver `POST /api/importar` en una única `prisma.$transaction` global (evita datos inconsistentes ante fallos parciales). | ALTA | ✅ Completado | `src/app/api/importar/route.ts`: las 9 secciones (categorías, proveedores, insumos, precios, muebles, despiece x3 formatos, residuales, recálculo de costoActual) corren dentro de un único `prisma.$transaction(async (tx) => {...}, { maxWait: 10000, timeout: 120000 })`. `timeout` elevado a 120s por la cantidad de queries secuenciales. Verificado: build limpio, 57 tests OK, `/api/importar` (preview) parsea correctamente la plantilla real descargada vía `/api/importar/plantilla`. |
 | RFO-002 | Crear `.env.test` con valores mock para que vitest corra sin EACCES sobre el `.env` de producción. | MEDIA | ✅ Completado | `env-test/.env.test` + `vitest.config.ts` con `envDir` apuntando ahí (evita que vite intente leer el `.env` 600 de `launion`). Verificado: `npm test` corre sin EACCES como usuario `joaquin`. |
 | RFO-003 | Implementar `GET /api/health` con estado de la BD, versión de la app y uptime. | MEDIA | ✅ Completado | `src/app/api/health/route.ts` (`SELECT 1`, version desde package.json, uptime). Excluido de auth en `proxy.ts`. |
 
@@ -76,3 +76,4 @@ implementarse de forma incremental sin interrumpir el servicio.
   `public`/`static` al directorio `standalone` corría como root y anidaba
   `public/public`, bloqueando el siguiente `npm run build` con EACCES); ahora
   corre como `$APP_USER` y limpia el destino antes de copiar.
+- **2026-06-11**: Completado RFO-001 (transacción global en `/api/importar`).
