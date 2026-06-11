@@ -21,28 +21,37 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const buscar = searchParams.get("buscar") ?? "";
   const categoriaId = searchParams.get("categoriaId");
+  const page = Math.max(1, Number(searchParams.get("page") || 1));
+  const pageSize = Number(searchParams.get("pageSize") || 20);
 
-  const insumos = await prisma.insumo.findMany({
-    where: {
-      estado: "activo",
-      categoriaId: categoriaId ?? undefined,
-      OR: buscar
-        ? [
-            { descripcion: { contains: buscar, mode: "insensitive" } },
-            { codigo: { contains: buscar, mode: "insensitive" } },
-          ]
-        : undefined,
-    },
-    orderBy: [{ categoria: { nombre: "asc" } }, { descripcion: "asc" }],
-    include: {
-      categoria: { select: { nombre: true } },
-      precios: {
-        where: { estado: "vigente" },
-        orderBy: { precio: "asc" },
-        include: { proveedor: { select: { nombre: true } } },
+  const where = {
+    estado: "activo" as const,
+    categoriaId: categoriaId ?? undefined,
+    OR: buscar
+      ? [
+          { descripcion: { contains: buscar, mode: "insensitive" as const } },
+          { codigo: { contains: buscar, mode: "insensitive" as const } },
+        ]
+      : undefined,
+  };
+
+  const [insumos, total] = await Promise.all([
+    prisma.insumo.findMany({
+      where,
+      orderBy: [{ categoria: { nombre: "asc" } }, { descripcion: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        categoria: { select: { nombre: true } },
+        precios: {
+          where: { estado: "vigente" },
+          orderBy: { precio: "asc" },
+          include: { proveedor: { select: { nombre: true } } },
+        },
       },
-    },
-  });
+    }),
+    prisma.insumo.count({ where }),
+  ]);
 
   // Si el insumo tiene un precio seleccionado manualmente, devolverlo primero.
   // Si no, el primero del array ya es el mínimo (orderBy asc).
@@ -59,7 +68,7 @@ export async function GET(req: NextRequest) {
     return i;
   });
 
-  return NextResponse.json(resultado);
+  return NextResponse.json({ insumos: resultado, total });
 }
 
 export async function POST(req: NextRequest) {

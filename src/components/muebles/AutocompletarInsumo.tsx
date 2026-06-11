@@ -64,7 +64,7 @@ export function AutocompletarInsumo({
         const data = await res.json();
         setOpciones(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          data.map((i: any) => ({
+          data.insumos.map((i: any) => ({
             id: i.id,
             codigo: i.codigo,
             descripcion: i.descripcion,

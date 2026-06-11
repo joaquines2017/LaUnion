@@ -19,19 +19,28 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const buscar = searchParams.get("buscar") ?? "";
   const incluirInactivos = searchParams.get("inactivos") === "true";
+  const page = Math.max(1, Number(searchParams.get("page") || 1));
+  const pageSize = Number(searchParams.get("pageSize") || 20);
 
-  const proveedores = await prisma.proveedor.findMany({
-    where: {
-      estado: incluirInactivos ? undefined : "activo",
-      nombre: buscar ? { contains: buscar, mode: "insensitive" } : undefined,
-    },
-    orderBy: { nombre: "asc" },
-    include: {
-      _count: { select: { precios: { where: { estado: "vigente" } } } },
-    },
-  });
+  const where = {
+    estado: incluirInactivos ? undefined : "activo",
+    nombre: buscar ? { contains: buscar, mode: "insensitive" as const } : undefined,
+  };
 
-  return NextResponse.json(proveedores);
+  const [proveedores, total] = await Promise.all([
+    prisma.proveedor.findMany({
+      where,
+      orderBy: { nombre: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        _count: { select: { precios: { where: { estado: "vigente" } } } },
+      },
+    }),
+    prisma.proveedor.count({ where }),
+  ]);
+
+  return NextResponse.json({ proveedores, total });
 }
 
 export async function POST(req: NextRequest) {
