@@ -45,7 +45,7 @@ el orden de la tabla.
 
 | ID | Descripción | Prioridad | Estado | Notas |
 |----|-------------|-----------|--------|-------|
-| RFF-001 | **Crítico.** Aislamiento de datos por empresa: agregar `empresaId` a insumos, muebles, proveedores, categorias_insumo, categorias_mueble, unidades_medida, configuracion_global, materiales_residuales. Filtrar todos los GET/POST/PATCH/DELETE por la empresa del usuario autenticado. | CRÍTICA | ⬜ Pendiente | |
+| RFF-001 | **Crítico.** Aislamiento de datos por empresa: agregar `empresaId` a insumos, muebles, proveedores, categorias_insumo, categorias_mueble, unidades_medida, configuracion_global, materiales_residuales. Filtrar todos los GET/POST/PATCH/DELETE por la empresa del usuario autenticado. | CRÍTICA | ✅ Completado | Migración `20260612000000_empresa_data_isolation` (hand-written): crea la empresa por defecto "La Union" (UUID fijo `bdbadb48-173b-45ff-a60d-ef8be6f335c4`) y migra TODOS los datos existentes (2 usuarios, 68 insumos, 3 muebles, 8 proveedores, 18 categorias_insumo, 11 categorias_mueble, 9 unidades_medida, 2 materiales_residuales, 1 configuracion_global) a esa empresa. Agrega `empresaId` a las 8 tablas de negocio + `log_auditoria` (nullable), con FK `ON DELETE RESTRICT` (negocio) / `SET NULL` (configuracion_global, log_auditoria), e índices únicos compuestos `(empresaId, nombre)` / `(empresaId, codigo)` reemplazando los simples. Nuevo helper `src/lib/empresa.ts` (`requireEmpresa()` para API routes, `requireEmpresaPage()` para Server Components). Las ~22 rutas API y ~14 páginas server-component filtran por `empresaId` (o hacen `findFirst({id, empresaId})` + 404 para ownership en rutas de detalle). Se agregó auth (antes inexistente) a `POST /api/muebles/[id]/imagenes` y `DELETE .../imagenes/[imagenId]`. Se filtró `prisma.usuario.findMany` en `configuracion/usuarios` por `empresaId`. **Hallazgo adicional corregido**: `/api/lista-corte`, `/excel`, `/pdf` y `getListaCorte()` (`src/lib/lista-corte.ts`) no filtraban por empresa — cualquier usuario autenticado podía ver/exportar la lista de corte de TODOS los muebles de TODAS las empresas; ahora `getListaCorte(empresaId, filters?)` exige `mueble: { empresaId }`. `prisma/seed.ts` actualizado (orden: empresa antes de configuracionGlobal/categorías/insumos, todos los upserts usan `empresaId_nombre`/`empresaId_codigo`). Verificado local: `tsc`/`prisma generate` limpios, lint sin errores nuevos (4 errores/10 warnings preexistentes en archivos no tocados), 57/57 tests, build OK. Desplegado en producción: migración aplicada (12→13 migraciones), build y restart OK, `journalctl` sin errores. Verificado en prod: 1 empresa "La Union", 2 usuarios con `empresaId` correcto, los 8 conteos de tablas intactos y con `empresaId` poblado, índices únicos compuestos creados (`insumos_empresaId_codigo_key`, `categorias_insumo_empresaId_nombre_key`, etc.) e índices `empresaId_idx` presentes. Login + smoke test de 11 páginas/endpoints (dashboard, insumos, muebles, proveedores, precios, categorias, unidades-medida, residuales, reportes, auditoria, lista-corte, despiece) → todos 200 con `empresaId` correcto en las respuestas. |
 | RFF-002 | Migrar `ConfiguracionGlobal` de singleton (id="1") a configuración por empresa (factor_desperdicio, moneda, vigencia_precios). | CRÍTICA | ⬜ Pendiente | Depende de RFF-001. |
 | RFF-003 | Endpoints `/api/superadmin/empresas/[id]/*` operan en el contexto de la empresa especificada, no en el global. | ALTA | ⬜ Pendiente | Depende de RFF-001/002. |
 
@@ -61,9 +61,10 @@ el orden de la tabla.
 
 ## Recomendación general
 
-No incorporar empresas reales al sistema hasta completar RFF-001 y RFF-002
-(único bloqueante funcional real). El resto de las mejoras pueden
-implementarse de forma incremental sin interrumpir el servicio.
+RFF-001 está completo. No incorporar empresas reales al sistema hasta
+completar también RFF-002 (configuración por empresa, próxima tarea). El
+resto de las mejoras pueden implementarse de forma incremental sin
+interrumpir el servicio.
 
 ## Historial de cambios de este checklist
 
@@ -90,3 +91,11 @@ implementarse de forma incremental sin interrumpir el servicio.
   `src/lib/session-cache.ts` (cache en memoria de `auth()` por header
   `Cookie`, TTL 10s, máx. 500 entradas). Verificado en producción: flujo de
   login/redirects/páginas autenticadas funciona igual que antes.
+- **2026-06-12**: Completado RFF-001 (aislamiento multi-tenant por
+  `empresaId`). Migración `20260612000000_empresa_data_isolation` crea la
+  empresa "La Union" (UUID fijo) y migra todos los datos existentes. Nuevo
+  helper `src/lib/empresa.ts`. ~22 rutas API + ~14 páginas server-component
+  filtran por `empresaId`. Corregido hallazgo de fuga cross-tenant en
+  `/api/lista-corte/*`. `prisma/seed.ts` actualizado. Desplegado y verificado
+  en producción (54 archivos, 630/-247 líneas). Próxima tarea: RFF-002
+  (`ConfiguracionGlobal` por empresa).
