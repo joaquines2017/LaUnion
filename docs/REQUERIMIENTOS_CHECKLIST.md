@@ -46,7 +46,7 @@ el orden de la tabla.
 | ID | Descripción | Prioridad | Estado | Notas |
 |----|-------------|-----------|--------|-------|
 | RFF-001 | **Crítico.** Aislamiento de datos por empresa: agregar `empresaId` a insumos, muebles, proveedores, categorias_insumo, categorias_mueble, unidades_medida, configuracion_global, materiales_residuales. Filtrar todos los GET/POST/PATCH/DELETE por la empresa del usuario autenticado. | CRÍTICA | ✅ Completado | Migración `20260612000000_empresa_data_isolation` (hand-written): crea la empresa por defecto "La Union" (UUID fijo `bdbadb48-173b-45ff-a60d-ef8be6f335c4`) y migra TODOS los datos existentes (2 usuarios, 68 insumos, 3 muebles, 8 proveedores, 18 categorias_insumo, 11 categorias_mueble, 9 unidades_medida, 2 materiales_residuales, 1 configuracion_global) a esa empresa. Agrega `empresaId` a las 8 tablas de negocio + `log_auditoria` (nullable), con FK `ON DELETE RESTRICT` (negocio) / `SET NULL` (configuracion_global, log_auditoria), e índices únicos compuestos `(empresaId, nombre)` / `(empresaId, codigo)` reemplazando los simples. Nuevo helper `src/lib/empresa.ts` (`requireEmpresa()` para API routes, `requireEmpresaPage()` para Server Components). Las ~22 rutas API y ~14 páginas server-component filtran por `empresaId` (o hacen `findFirst({id, empresaId})` + 404 para ownership en rutas de detalle). Se agregó auth (antes inexistente) a `POST /api/muebles/[id]/imagenes` y `DELETE .../imagenes/[imagenId]`. Se filtró `prisma.usuario.findMany` en `configuracion/usuarios` por `empresaId`. **Hallazgo adicional corregido**: `/api/lista-corte`, `/excel`, `/pdf` y `getListaCorte()` (`src/lib/lista-corte.ts`) no filtraban por empresa — cualquier usuario autenticado podía ver/exportar la lista de corte de TODOS los muebles de TODAS las empresas; ahora `getListaCorte(empresaId, filters?)` exige `mueble: { empresaId }`. `prisma/seed.ts` actualizado (orden: empresa antes de configuracionGlobal/categorías/insumos, todos los upserts usan `empresaId_nombre`/`empresaId_codigo`). Verificado local: `tsc`/`prisma generate` limpios, lint sin errores nuevos (4 errores/10 warnings preexistentes en archivos no tocados), 57/57 tests, build OK. Desplegado en producción: migración aplicada (12→13 migraciones), build y restart OK, `journalctl` sin errores. Verificado en prod: 1 empresa "La Union", 2 usuarios con `empresaId` correcto, los 8 conteos de tablas intactos y con `empresaId` poblado, índices únicos compuestos creados (`insumos_empresaId_codigo_key`, `categorias_insumo_empresaId_nombre_key`, etc.) e índices `empresaId_idx` presentes. Login + smoke test de 11 páginas/endpoints (dashboard, insumos, muebles, proveedores, precios, categorias, unidades-medida, residuales, reportes, auditoria, lista-corte, despiece) → todos 200 con `empresaId` correcto en las respuestas. |
-| RFF-002 | Migrar `ConfiguracionGlobal` de singleton (id="1") a configuración por empresa (factor_desperdicio, moneda, vigencia_precios). | CRÍTICA | ⬜ Pendiente | Depende de RFF-001. |
+| RFF-002 | Migrar `ConfiguracionGlobal` de singleton (id="1") a configuración por empresa (factor_desperdicio, moneda, vigencia_precios). | CRÍTICA | ✅ Completado | `ConfiguracionGlobal` deja de ser singleton: `empresaId` pasa de `String? @unique` a `String @unique` (1:1 obligatorio con `Empresa`), `id` cambia de `@default("1")` a `@default(uuid())` (sin migración SQL — el default `uuid()` de Prisma para `String` en PostgreSQL se genera client-side en el INSERT, no como `DEFAULT` de columna; la DB conserva el `Default: '1'::text` preexistente en `id`, inocuo), y el FK pasa de `ON DELETE SET NULL` a `ON DELETE CASCADE` (la config es un detalle de la empresa, no tiene sentido sin ella). Migración `20260612010000_configuracion_global_por_empresa`: `ALTER COLUMN "empresaId" SET NOT NULL` + recrear el FK con `ON DELETE CASCADE` (el índice único `configuracion_global_empresaId_key` ya existía desde RFF-001). Los 11 sitios de lectura/escritura en 10 archivos (`/api/configuracion` reescrito con `requireEmpresa()` + `upsert({ where: { empresaId } })`, `configuracion/page.tsx`, dashboard, `insumos/[id]`, `muebles/[id]`, `proveedores/[id]`, `precios/page.tsx`, `/api/precios`, `/api/insumos/[id]`, `/api/materiales-residuales/[id]/comparacion`) pasan de `findUnique({ where: { id: "1" } })` a `findUnique`/`upsert({ where: { empresaId } })`, reutilizando el `empresaId` ya disponible desde `requireEmpresa()`/`requireEmpresaPage()` (RFF-001). `prisma/seed.ts` actualizado al mismo patrón. No se modificó `/api/superadmin/empresas` (POST): la config de una empresa nueva se crea de forma perezosa en su primer acceso vía `upsert`. Verificado local: `prisma generate`/`tsc`/lint (mismos 14 issues preexistentes)/`npm test` (57/57)/`build` OK. Desplegado (commit `16d3b3f`, migración 13/13 aplicada, build y restart OK). Verificado en producción: fila de `configuracion_global` preservada (`vigenciaPrecioDias=60`, valor previamente configurado por un usuario, intacto tras la migración), `empresaId` NOT NULL sin default, índice único e índice FK `ON DELETE CASCADE` correctos; login + `GET`/`PATCH /api/configuracion` (`{"id":"1","empresaId":"bdbadb48-...","factorDesperdicio":1.1,"moneda":"ARS","vigenciaPrecioDias":60}`) + 6 páginas (dashboard, configuración, precios, detalle de insumo/mueble/proveedor) → 200; `journalctl` sin errores. |
 | RFF-003 | Endpoints `/api/superadmin/empresas/[id]/*` operan en el contexto de la empresa especificada, no en el global. | ALTA | ⬜ Pendiente | Depende de RFF-001/002. |
 
 ## Operacionales (RFO)
@@ -61,10 +61,13 @@ el orden de la tabla.
 
 ## Recomendación general
 
-RFF-001 está completo. No incorporar empresas reales al sistema hasta
-completar también RFF-002 (configuración por empresa, próxima tarea). El
-resto de las mejoras pueden implementarse de forma incremental sin
-interrumpir el servicio.
+RFF-001 y RFF-002 están completos: el sistema queda con aislamiento de datos
+por empresa y configuración (`factorDesperdicio`, `moneda`,
+`vigenciaPrecioDias`) por empresa. El sistema está listo para incorporar
+nuevas empresas reales (la creación de la config por defecto es perezosa, al
+primer acceso de cada empresa). RFF-003 (endpoints superadmin por contexto de
+empresa) queda como próxima tarea funcional. El resto de las mejoras pueden
+implementarse de forma incremental sin interrumpir el servicio.
 
 ## Historial de cambios de este checklist
 
@@ -99,3 +102,13 @@ interrumpir el servicio.
   `/api/lista-corte/*`. `prisma/seed.ts` actualizado. Desplegado y verificado
   en producción (54 archivos, 630/-247 líneas). Próxima tarea: RFF-002
   (`ConfiguracionGlobal` por empresa).
+- **2026-06-12**: Completado RFF-002 (`ConfiguracionGlobal` por empresa).
+  Migración `20260612010000_configuracion_global_por_empresa`: `empresaId`
+  pasa a `NOT NULL @unique` (1:1 con `Empresa`), FK `ON DELETE SET NULL` →
+  `CASCADE`, `id` pasa de `@default("1")` a `@default(uuid())`. 11 sitios de
+  lectura/escritura en 10 archivos migrados de `where: { id: "1" }` a
+  `where: { empresaId }` (incl. `/api/configuracion` reescrito con
+  `requireEmpresa()` + `upsert`). `prisma/seed.ts` actualizado. Desplegado y
+  verificado en producción (commit `16d3b3f`, 13/13 migraciones, valor previo
+  `vigenciaPrecioDias=60` preservado). Próxima tarea: RFF-003 (endpoints
+  superadmin por contexto de empresa).
