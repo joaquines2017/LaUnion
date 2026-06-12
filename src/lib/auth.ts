@@ -1,8 +1,9 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { estaBloqueado, registrarIntentoFallido, limpiarIntentos } from "@/lib/rate-limit";
 
 // RNFS-006: la política de 8 caracteres + complejidad se exige al crear o
 // cambiar contraseñas (ver src/lib/password.ts). Aquí se mantiene un mínimo
@@ -14,6 +15,16 @@ const loginSchema = z.object({
   password: z.string().min(6),
 });
 
+// RNFS-002: código de error distinguible para que el formulario de login
+// muestre un mensaje específico cuando se supera el límite de intentos.
+class TooManyAttemptsError extends CredentialsSignin {
+  code = "too-many-attempts";
+}
+
+function obtenerIp(request: Request): string {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
@@ -22,9 +33,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Contraseña", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
+        const ip = obtenerIp(request);
+        if (estaBloqueado(ip)) throw new TooManyAttemptsError();
+
         const parsed = loginSchema.safeParse(credentials);
-        if (!parsed.success) return null;
+        if (!parsed.success) {
+          registrarIntentoFallido(ip);
+          return null;
+        }
 
         const { email, password } = parsed.data;
 
@@ -32,10 +49,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { email },
         });
 
-        if (!usuario || usuario.estado !== "activo") return null;
+        if (!usuario || usuario.estado !== "activo") {
+          registrarIntentoFallido(ip);
+          return null;
+        }
 
         const passwordOk = await bcrypt.compare(password, usuario.passwordHash);
-        if (!passwordOk) return null;
+        if (!passwordOk) {
+          registrarIntentoFallido(ip);
+          return null;
+        }
+
+        limpiarIntentos(ip);
 
         return {
           id: usuario.id,

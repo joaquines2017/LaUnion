@@ -25,7 +25,11 @@ export default function LoginPage() {
     });
 
     if (result?.error) {
-      setError("Email o contraseña incorrectos.");
+      if (result.code === "too-many-attempts") {
+        setError("Demasiados intentos fallidos. Esperá unos minutos antes de volver a intentar.");
+      } else {
+        setError("Email o contraseña incorrectos.");
+      }
     } else {
       router.push("/");
       router.refresh();
