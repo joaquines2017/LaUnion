@@ -18,7 +18,7 @@ el orden de la tabla.
 | ID | Descripción | Prioridad | Estado | Notas |
 |----|-------------|-----------|--------|-------|
 | RNFS-001 | Implementar Firewall (UFW) en ambos servidores: SSH:2190 desde LAN, puerto 3000 desde red interna, bloquear el resto. | CRÍTICA | ⏸️ Diferido | Se resuelve al final del plan. |
-| RNFS-002 | Rate limiting en endpoints de autenticación: máx. 5 intentos fallidos por IP en 15 min con bloqueo temporal. | CRÍTICA | ⬜ Pendiente | |
+| RNFS-002 | Rate limiting en endpoints de autenticación: máx. 5 intentos fallidos por IP en 15 min con bloqueo temporal. | CRÍTICA | ✅ Completado | `src/lib/rate-limit.ts`: contador en memoria por IP con ventana deslizante de 15 min (máx. 5 intentos fallidos), suficiente porque la app corre como una única instancia systemd. `src/lib/auth.ts`: `authorize(credentials, request)` obtiene la IP desde `x-forwarded-for` (Next.js standalone la completa automáticamente con `req.socket.remoteAddress` si no viene seteada por un proxy). Si la IP está bloqueada, lanza `TooManyAttemptsError` (subclase de `CredentialsSignin` con `code: "too-many-attempts"`) antes de validar credenciales — el bloqueo aplica incluso con credenciales correctas. Cada intento fallido (input inválido, usuario inexistente/inactivo, password incorrecta) suma al contador; un login exitoso lo limpia. `src/app/login/page.tsx` muestra un mensaje específico para ese código. Verificado en producción: build limpio, 57 tests OK, deploy OK; 6 intentos fallidos consecutivos desde la misma IP devuelven `error=CredentialsSignin&code=too-many-attempts` a partir del 6º, y un intento posterior con credenciales correctas también es bloqueado mientras dure la ventana. |
 | RNFS-003 | Security headers HTTP en `next.config.ts`: CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, HSTS (cuando haya HTTPS). | ALTA | ✅ Completado | `next.config.ts`: headers globales vía `headers()`. CSP permisiva (`unsafe-inline`/`unsafe-eval`, requerido por Next.js sin nonces). HSTS declarado para cuando RNFS-004 esté activo. |
 | RNFS-004 | HTTPS con certificado SSL: contenedor `nginx-proxy` con Certbot o certificado autofirmado para red interna. | ALTA | ⬜ Pendiente | |
 | RNFS-005 | Instalar y configurar Fail2ban en ambos servidores: banear IPs con +3 intentos fallidos SSH en 5 min. | ALTA | ⬜ Pendiente | |
@@ -81,3 +81,8 @@ implementarse de forma incremental sin interrumpir el servicio.
   `/api/auditoria` ya estaban paginados; se agregó el mismo patrón a
   `/api/insumos` y `/api/proveedores` (`{insumos, total}` /
   `{proveedores, total}`), actualizando `AutocompletarInsumo.tsx`.
+- **2026-06-12**: Completado RNFS-002 (rate limiting de login). Nuevo
+  `src/lib/rate-limit.ts` (contador en memoria por IP, ventana de 15 min,
+  máx. 5 intentos); `authorize()` en `src/lib/auth.ts` lo consulta usando la
+  IP de `x-forwarded-for`. Verificado en producción con 6+ intentos fallidos
+  consecutivos.
