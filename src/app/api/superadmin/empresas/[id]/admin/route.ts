@@ -68,6 +68,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       accion:    "ADMIN_EMPRESA_MODIFICADO",
       entidad:   "Usuario",
       entidadId: admin.id,
+      empresaId: id,
       datosNuevos: { ...rest, passwordCambiado: !!password },
     });
 
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     accion:    "CREDENCIALES_REENVIADAS",
     entidad:   "Usuario",
     entidadId: admin.id,
+    empresaId: id,
   });
 
   return NextResponse.json({ ok: true, emailError });

@@ -35,6 +35,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     accion:    "EMPRESA_MODIFICADA",
     entidad:   "Empresa",
     entidadId: id,
+    empresaId: id,
     datosNuevos: parsed.data,
   });
 
@@ -60,6 +61,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     accion:    "EMPRESA_DESACTIVADA",
     entidad:   "Empresa",
     entidadId: id,
+    empresaId: id,
   });
 
   return NextResponse.json({ ok: true });
