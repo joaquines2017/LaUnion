@@ -16,7 +16,7 @@ export async function GET(
   const residual = await prisma.materialResidual.findFirst({ where: { id, empresaId } });
   if (!residual) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
-  const config = await prisma.configuracionGlobal.findUnique({ where: { id: "1" } });
+  const config = await prisma.configuracionGlobal.findUnique({ where: { empresaId } });
   const factorDesperdicio = config?.factorDesperdicio ?? 1.1;
 
   const resultado = await compararResidual(

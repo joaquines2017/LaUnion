@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   let cascada = null;
   try {
     const [config, insumo] = await Promise.all([
-      prisma.configuracionGlobal.findUnique({ where: { id: "1" } }),
+      prisma.configuracionGlobal.findUnique({ where: { empresaId } }),
       prisma.insumo.findUnique({ where: { id: insumoId }, select: { precioSeleccionadoId: true } }),
     ]);
     const factorDesperdicio = config?.factorDesperdicio ?? 1.1;

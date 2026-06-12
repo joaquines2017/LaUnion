@@ -13,7 +13,7 @@ import { formatearPrecio, formatearFecha } from "@/lib/formato";
 import Link from "next/link";
 
 async function getDashboardStats(empresaId: string) {
-  const config = await prisma.configuracionGlobal.findUnique({ where: { id: "1" } });
+  const config = await prisma.configuracionGlobal.findUnique({ where: { empresaId } });
   const vigenciaDias = config?.vigenciaPrecioDias ?? 30;
   const fechaLimite = new Date();
   fechaLimite.setDate(fechaLimite.getDate() - vigenciaDias);

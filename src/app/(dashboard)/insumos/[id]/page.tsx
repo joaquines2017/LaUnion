@@ -40,7 +40,7 @@ export default async function DetalleInsumoPage({
         },
       },
     }),
-    prisma.configuracionGlobal.findUnique({ where: { id: "1" } }),
+    prisma.configuracionGlobal.findUnique({ where: { empresaId } }),
   ]);
 
   if (!insumo) notFound();

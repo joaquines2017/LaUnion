@@ -79,7 +79,7 @@ export async function PATCH(
   let cascada = null;
   if (precioBaseNuevo != null && precioBaseNuevo !== precioBaseAnterior) {
     try {
-      const config = await prisma.configuracionGlobal.findUnique({ where: { id: "1" } });
+      const config = await prisma.configuracionGlobal.findUnique({ where: { empresaId } });
       const factorDesperdicio = config?.factorDesperdicio ?? 1.1;
       cascada = await recalcularCascada(id, precioBaseNuevo, Number(factorDesperdicio));
     } catch (err) {

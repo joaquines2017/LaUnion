@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 
 const schema = z.object({
@@ -9,21 +9,23 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const config = await prisma.configuracionGlobal.upsert({
-    where: { id: "1" },
+    where: { empresaId },
     update: {},
-    create: { id: "1" },
+    create: { empresaId },
   });
 
   return NextResponse.json(config);
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const body = await req.json();
   const parsed = schema.partial().safeParse(body);
@@ -32,9 +34,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   const config = await prisma.configuracionGlobal.upsert({
-    where: { id: "1" },
+    where: { empresaId },
     update: parsed.data,
-    create: { id: "1", ...parsed.data },
+    create: { empresaId, ...parsed.data },
   });
 
   return NextResponse.json(config);

@@ -46,9 +46,9 @@ async function main() {
 
   // ── Configuración global ────────────────────────────────────────────────
   await prisma.configuracionGlobal.upsert({
-    where: { id: "1" },
+    where: { empresaId: empresaLaUnion.id },
     update: {},
-    create: { id: "1", empresaId: empresaLaUnion.id, factorDesperdicio: 1.10, moneda: "ARS", vigenciaPrecioDias: 30 },
+    create: { empresaId: empresaLaUnion.id, factorDesperdicio: 1.10, moneda: "ARS", vigenciaPrecioDias: 30 },
   });
 
   // ── Categorías de insumos ───────────────────────────────────────────────

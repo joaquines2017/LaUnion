@@ -316,13 +316,13 @@ model ReservaResidual {
 // ─── Configuración y Auditoría ───────────────────────────────────────────────
 
 model ConfiguracionGlobal {
-  id                 String  @id @default("1") // singleton (RFF-002 lo migra a config por empresa)
-  empresaId          String? @unique
-  factorDesperdicio  Float   @default(1.10) // 1.10 = 10% desperdicio por defecto
-  moneda             String  @default("ARS")
-  vigenciaPrecioDias Int     @default(30)
+  id                 String @id @default(uuid())
+  empresaId          String @unique
+  factorDesperdicio  Float  @default(1.10) // 1.10 = 10% desperdicio por defecto
+  moneda             String @default("ARS")
+  vigenciaPrecioDias Int    @default(30)
 
-  empresa Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
 
   @@map("configuracion_global")
 }

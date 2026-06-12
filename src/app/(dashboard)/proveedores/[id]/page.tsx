@@ -49,7 +49,7 @@ export default async function DetalleProveedorPage({
       },
     }),
     prisma.categoriaInsumo.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
-    prisma.configuracionGlobal.findUnique({ where: { id: "1" } }),
+    prisma.configuracionGlobal.findUnique({ where: { empresaId } }),
   ]);
 
   if (!proveedor) notFound();
