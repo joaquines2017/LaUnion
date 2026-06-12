@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { FormInsumo } from "@/components/insumos/FormInsumo";
 
 export default async function NuevoInsumoPage() {
+  const { empresaId } = await requireEmpresaPage();
   const categorias = await prisma.categoriaInsumo.findMany({
+    where: { empresaId },
     orderBy: { nombre: "asc" },
   });
 

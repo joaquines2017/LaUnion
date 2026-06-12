@@ -15,8 +15,11 @@ export async function GET(req: NextRequest) {
   const accion   = searchParams.get("accion") ?? undefined;
   const entidad  = searchParams.get("entidad") ?? undefined;
   const q        = searchParams.get("q") ?? undefined;
+  const role     = (session.user as { role?: string }).role;
+  const empresaId = (session.user as { empresaId?: string | null }).empresaId ?? null;
 
   const where = {
+    ...(role !== "superadmin" ? { empresaId } : {}),
     ...(accion  ? { accion }  : {}),
     ...(entidad ? { entidad } : {}),
     ...(q ? { OR: [

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 
 const schema = z.object({
@@ -9,10 +9,12 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const unidades = await prisma.unidadMedida.findMany({
+    where: { empresaId },
     orderBy: { nombre: "asc" },
   });
 
@@ -20,7 +22,7 @@ export async function GET() {
   const conConteo = await Promise.all(
     unidades.map(async (u) => ({
       ...u,
-      _count: { insumos: await prisma.insumo.count({ where: { unidadMedida: u.nombre } }) },
+      _count: { insumos: await prisma.insumo.count({ where: { unidadMedida: u.nombre, empresaId } }) },
     }))
   );
 
@@ -28,8 +30,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const body = await req.json();
   const parsed = schema.safeParse(body);
@@ -37,11 +40,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
 
   const existe = await prisma.unidadMedida.findUnique({
-    where: { nombre: parsed.data.nombre },
+    where: { empresaId_nombre: { empresaId, nombre: parsed.data.nombre } },
   });
   if (existe)
     return NextResponse.json({ error: "Ya existe una unidad con ese nombre" }, { status: 409 });
 
-  const unidad = await prisma.unidadMedida.create({ data: parsed.data });
+  const unidad = await prisma.unidadMedida.create({ data: { ...parsed.data, empresaId } });
   return NextResponse.json(unidad, { status: 201 });
 }

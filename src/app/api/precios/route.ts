@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 import { recalcularCascada } from "@/lib/recalculo-cascada";
 import { registrarLog } from "@/lib/auditoria";
@@ -12,8 +12,9 @@ const precioSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId, session } = ctx;
 
   const body = await req.json();
   const parsed = precioSchema.safeParse(body);
@@ -22,6 +23,14 @@ export async function POST(req: NextRequest) {
   }
 
   const { insumoId, proveedorId, precio } = parsed.data;
+
+  const [insumoValido, proveedorValido] = await Promise.all([
+    prisma.insumo.count({ where: { id: insumoId, empresaId } }),
+    prisma.proveedor.count({ where: { id: proveedorId, empresaId } }),
+  ]);
+  if (!insumoValido || !proveedorValido) {
+    return NextResponse.json({ error: "Insumo o proveedor no encontrado" }, { status: 404 });
+  }
 
   // Upsert: crear o actualizar precio vigente
   const precioExistente = await prisma.precioProveedor.findUnique({
@@ -49,6 +58,7 @@ export async function POST(req: NextRequest) {
       accion: "PRECIO_MODIFICADO",
       entidad: "PrecioProveedor",
       entidadId: result.id,
+      empresaId,
       datosAnteriores: { precio: Number(precioExistente.precio) },
       datosNuevos: { precio },
     });
@@ -61,6 +71,7 @@ export async function POST(req: NextRequest) {
       accion: "PRECIO_CREADO",
       entidad: "PrecioProveedor",
       entidadId: result.id,
+      empresaId,
       datosNuevos: { insumoId, proveedorId, precio },
     });
   }

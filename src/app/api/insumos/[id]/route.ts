@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 import { recalcularCascada } from "@/lib/recalculo-cascada";
 
@@ -20,12 +20,13 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
-  const insumo = await prisma.insumo.findUnique({
-    where: { id },
+  const insumo = await prisma.insumo.findFirst({
+    where: { id, empresaId },
     include: {
       categoria: true,
       precios: {
@@ -43,8 +44,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
   const body = await req.json();
@@ -53,11 +55,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
   }
 
-  // Leer precioBase actual antes de actualizar (para detectar cambio)
-  const actual = await prisma.insumo.findUnique({
-    where: { id },
+  // Leer precioBase actual antes de actualizar (y verificar pertenencia a la empresa)
+  const actual = await prisma.insumo.findFirst({
+    where: { id, empresaId },
     select: { precioBase: true },
   });
+  if (!actual) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   let insumo;
   try {
@@ -91,10 +94,14 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
+
+  const existe = await prisma.insumo.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!existe) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   // No se puede dar de baja si está en despieces activos
   const enUso = await prisma.despieceMaterial.count({ where: { insumoId: id } });

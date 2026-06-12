@@ -11,6 +11,7 @@ datasource db {
 
 model Proveedor {
   id            String            @id @default(uuid())
+  empresaId     String
   nombre        String
   cuit          String?
   telefono      String?
@@ -19,8 +20,11 @@ model Proveedor {
   observaciones String?
   estado        String            @default("activo") // activo | inactivo
   createdAt     DateTime          @default(now())
-  precios       PrecioProveedor[]
 
+  empresa Empresa           @relation(fields: [empresaId], references: [id])
+  precios PrecioProveedor[]
+
+  @@index([empresaId])
   @@map("proveedores")
 }
 
@@ -28,16 +32,22 @@ model Proveedor {
 
 model CategoriaInsumo {
   id          String   @id @default(uuid())
-  nombre      String   @unique
+  empresaId   String
+  nombre      String
   descripcion String?
-  insumos     Insumo[]
 
+  empresa Empresa  @relation(fields: [empresaId], references: [id])
+  insumos Insumo[]
+
+  @@unique([empresaId, nombre])
+  @@index([empresaId])
   @@map("categorias_insumo")
 }
 
 model Insumo {
   id           String   @id @default(uuid())
-  codigo       String   @unique
+  empresaId    String
+  codigo       String
   descripcion  String
   categoriaId  String
   unidadMedida String   @default("unidad") // unidad | metro | metroLineal | kilo | par | juego | rollo | placa
@@ -50,6 +60,7 @@ model Insumo {
 
   precioSeleccionadoId String?
 
+  empresa              Empresa            @relation(fields: [empresaId], references: [id])
   categoria            CategoriaInsumo    @relation(fields: [categoriaId], references: [id])
   precios              PrecioProveedor[]  @relation("InsumoPrecios")
   precioSeleccionado   PrecioProveedor?   @relation("PrecioSeleccionado", fields: [precioSeleccionadoId], references: [id])
@@ -57,6 +68,8 @@ model Insumo {
   despieceInsumos      DespieceInsumo[]
   materialesResiduales MaterialResidual[]
 
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
   @@index([categoriaId])
   @@index([precioSeleccionadoId])
   @@map("insumos")
@@ -98,16 +111,22 @@ model HistorialPrecio {
 // ─── Muebles ─────────────────────────────────────────────────────────────────
 
 model CategoriaMueble {
-  id      String   @id @default(uuid())
-  nombre  String   @unique
+  id        String   @id @default(uuid())
+  empresaId String
+  nombre    String
+
+  empresa Empresa  @relation(fields: [empresaId], references: [id])
   muebles Mueble[]
 
+  @@unique([empresaId, nombre])
+  @@index([empresaId])
   @@map("categorias_mueble")
 }
 
 model Mueble {
   id          String   @id @default(uuid())
-  codigo      String   @unique // carga manual obligatoria, ej: "05-147-000"
+  empresaId   String
+  codigo      String // carga manual obligatoria, ej: "05-147-000"
   nombre      String
   categoriaId String
   costoActual Decimal  @default(0) @db.Decimal(12, 2)
@@ -115,6 +134,7 @@ model Mueble {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  empresa            Empresa            @relation(fields: [empresaId], references: [id])
   categoria          CategoriaMueble    @relation(fields: [categoriaId], references: [id])
   materiales         DespieceMaterial[]
   insumos            DespieceInsumo[]
@@ -122,6 +142,8 @@ model Mueble {
   imagenes           MuebleImagen[]
   reservasResiduales ReservaResidual[]
 
+  @@unique([empresaId, codigo])
+  @@index([empresaId])
   @@index([categoriaId])
   @@map("muebles")
 }
@@ -206,7 +228,16 @@ model Empresa {
   estado    String   @default("activo") // activo | inactivo
   createdAt DateTime @default(now())
 
-  usuarios Usuario[]
+  usuarios             Usuario[]
+  proveedores          Proveedor[]
+  categoriasInsumo     CategoriaInsumo[]
+  categoriasMueble     CategoriaMueble[]
+  unidadesMedida       UnidadMedida[]
+  insumos              Insumo[]
+  muebles              Mueble[]
+  materialesResiduales MaterialResidual[]
+  configuracion        ConfiguracionGlobal?
+  logsAuditoria        LogAuditoria[]
 
   @@map("empresas")
 }
@@ -233,9 +264,14 @@ model Usuario {
 
 model UnidadMedida {
   id          String  @id @default(uuid())
-  nombre      String  @unique // "unidad", "metro", "placa", etc.
+  empresaId   String
+  nombre      String // "unidad", "metro", "placa", etc.
   descripcion String?
 
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+
+  @@unique([empresaId, nombre])
+  @@index([empresaId])
   @@map("unidades_medida")
 }
 
@@ -243,6 +279,7 @@ model UnidadMedida {
 
 model MaterialResidual {
   id        String   @id @default(uuid())
+  empresaId String
   insumoId  String
   altoCm    Float
   anchoCm   Float
@@ -251,9 +288,11 @@ model MaterialResidual {
   estado    String   @default("disponible") // disponible | usado
   createdAt DateTime @default(now())
 
+  empresa  Empresa           @relation(fields: [empresaId], references: [id])
   insumo   Insumo            @relation(fields: [insumoId], references: [id])
   reservas ReservaResidual[]
 
+  @@index([empresaId])
   @@index([insumoId])
   @@map("materiales_residuales")
 }
@@ -277,16 +316,20 @@ model ReservaResidual {
 // ─── Configuración y Auditoría ───────────────────────────────────────────────
 
 model ConfiguracionGlobal {
-  id                 String @id @default("1") // singleton
-  factorDesperdicio  Float  @default(1.10) // 1.10 = 10% desperdicio por defecto
-  moneda             String @default("ARS")
-  vigenciaPrecioDias Int    @default(30)
+  id                 String  @id @default("1") // singleton (RFF-002 lo migra a config por empresa)
+  empresaId          String? @unique
+  factorDesperdicio  Float   @default(1.10) // 1.10 = 10% desperdicio por defecto
+  moneda             String  @default("ARS")
+  vigenciaPrecioDias Int     @default(30)
+
+  empresa Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
 
   @@map("configuracion_global")
 }
 
 model LogAuditoria {
   id              String   @id @default(uuid())
+  empresaId       String?
   fechaHora       DateTime @default(now())
   usuarioId       String
   accion          String // PRECIO_MODIFICADO | DESPIECE_MODIFICADO | RECALCULO_CASCADA | etc.
@@ -295,5 +338,8 @@ model LogAuditoria {
   datosAnteriores Json?
   datosNuevos     Json?
 
+  empresa Empresa? @relation(fields: [empresaId], references: [id], onDelete: SetNull)
+
+  @@index([empresaId])
   @@map("log_auditoria")
 }

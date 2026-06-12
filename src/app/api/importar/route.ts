@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { parsearExcel } from "@/lib/importar-excel";
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const formData = await req.formData();
   const file = formData.get("archivo") as File | null;
@@ -41,9 +42,9 @@ export async function POST(req: NextRequest) {
     // ── 1. Categorías de insumo ─────────────────────────────────────────────────
     for (const c of parsed.catInsumos.filter((c) => !c.error)) {
       await tx.categoriaInsumo.upsert({
-        where: { nombre: c.nombre },
+        where: { empresaId_nombre: { empresaId, nombre: c.nombre } },
         update: { descripcion: c.descripcion || undefined },
-        create: { nombre: c.nombre, descripcion: c.descripcion || undefined },
+        create: { empresaId, nombre: c.nombre, descripcion: c.descripcion || undefined },
       });
       contadores.catInsumos++;
     }
@@ -51,16 +52,16 @@ export async function POST(req: NextRequest) {
     // ── 2. Categorías de mueble ─────────────────────────────────────────────────
     for (const c of parsed.catMuebles.filter((c) => !c.error)) {
       await tx.categoriaMueble.upsert({
-        where: { nombre: c.nombre },
+        where: { empresaId_nombre: { empresaId, nombre: c.nombre } },
         update: {},
-        create: { nombre: c.nombre },
+        create: { empresaId, nombre: c.nombre },
       });
       contadores.catMuebles++;
     }
 
     // ── 3. Proveedores ──────────────────────────────────────────────────────────
     for (const p of parsed.proveedores.filter((p) => !p.error)) {
-      const existing = await tx.proveedor.findFirst({ where: { nombre: p.nombre } });
+      const existing = await tx.proveedor.findFirst({ where: { nombre: p.nombre, empresaId } });
       if (existing) {
         await tx.proveedor.update({
           where: { id: existing.id },
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
       } else {
         await tx.proveedor.create({
           data: {
+            empresaId,
             nombre: p.nombre,
             cuit: p.cuit || undefined,
             telefono: p.telefono || undefined,
@@ -91,14 +93,14 @@ export async function POST(req: NextRequest) {
     for (const ins of parsed.insumos.filter((i) => !i.error)) {
       // Obtener o crear categoría
       const cat = await tx.categoriaInsumo.upsert({
-        where: { nombre: ins.categoria },
+        where: { empresaId_nombre: { empresaId, nombre: ins.categoria } },
         update: {},
-        create: { nombre: ins.categoria },
+        create: { empresaId, nombre: ins.categoria },
       });
 
       try {
         await tx.insumo.upsert({
-          where: { codigo: ins.codigo },
+          where: { empresaId_codigo: { empresaId, codigo: ins.codigo } },
           update: {
             descripcion: ins.descripcion,
             categoriaId: cat.id,
@@ -109,6 +111,7 @@ export async function POST(req: NextRequest) {
             precioBase: ins.precioBase ?? undefined,
           },
           create: {
+            empresaId,
             codigo: ins.codigo,
             descripcion: ins.descripcion,
             categoriaId: cat.id,
@@ -127,12 +130,12 @@ export async function POST(req: NextRequest) {
 
     // ── 5. Precios ──────────────────────────────────────────────────────────────
     for (const p of parsed.precios.filter((p) => !p.error)) {
-      const insumo = await tx.insumo.findUnique({ where: { codigo: p.codigoInsumo } });
+      const insumo = await tx.insumo.findFirst({ where: { codigo: p.codigoInsumo, empresaId } });
       if (!insumo) {
         errores.push(`Fila ${p.fila}: precio — insumo "${p.codigoInsumo}" no encontrado`);
         continue;
       }
-      const proveedor = await tx.proveedor.findFirst({ where: { nombre: p.proveedor } });
+      const proveedor = await tx.proveedor.findFirst({ where: { nombre: p.proveedor, empresaId } });
       if (!proveedor) {
         errores.push(`Fila ${p.fila}: precio — proveedor "${p.proveedor}" no encontrado`);
         continue;
@@ -166,18 +169,18 @@ export async function POST(req: NextRequest) {
 
     for (const nombre of nombresCategoriaMueble) {
       const cat = await tx.categoriaMueble.upsert({
-        where: { nombre },
+        where: { empresaId_nombre: { empresaId, nombre } },
         update: {},
-        create: { nombre },
+        create: { empresaId, nombre },
       });
       categoriaMueblesMap[nombre] = cat.id;
     }
 
     // Categoría fallback
     const catFallback = await tx.categoriaMueble.upsert({
-      where: { nombre: "Sin categoría" },
+      where: { empresaId_nombre: { empresaId, nombre: "Sin categoría" } },
       update: {},
-      create: { nombre: "Sin categoría" },
+      create: { empresaId, nombre: "Sin categoría" },
     });
     categoriaMueblesMap[""] = catFallback.id;
 
@@ -185,9 +188,9 @@ export async function POST(req: NextRequest) {
       const categoriaId = categoriaMueblesMap[m.categoria] ?? catFallback.id;
       try {
         await tx.mueble.upsert({
-          where: { codigo: m.codigo },
+          where: { empresaId_codigo: { empresaId, codigo: m.codigo } },
           update: { nombre: m.nombre, categoriaId },
-          create: { codigo: m.codigo, nombre: m.nombre, categoriaId },
+          create: { empresaId, codigo: m.codigo, nombre: m.nombre, categoriaId },
         });
         contadores.muebles++;
       } catch {
@@ -208,7 +211,7 @@ export async function POST(req: NextRequest) {
 
     const mueblesPorCodigo: Record<string, string> = {};
     for (const codigo of codigosMueble) {
-      const mueble = await tx.mueble.findUnique({ where: { codigo }, select: { id: true } });
+      const mueble = await tx.mueble.findFirst({ where: { codigo, empresaId }, select: { id: true } });
       if (mueble) mueblesPorCodigo[codigo] = mueble.id;
     }
 
@@ -222,8 +225,8 @@ export async function POST(req: NextRequest) {
 
     const insumosPorCodigo: Record<string, { id: string; precioRef: number | null }> = {};
     for (const codigo of codigosInsumo) {
-      const insumo = await tx.insumo.findUnique({
-        where: { codigo },
+      const insumo = await tx.insumo.findFirst({
+        where: { codigo, empresaId },
         select: {
           id: true,
           precioBase: true,
@@ -334,13 +337,14 @@ export async function POST(req: NextRequest) {
 
     // ── 8. Residuales ───────────────────────────────────────────────────────────
     for (const r of parsed.residuales.filter((r) => !r.error)) {
-      const insumo = await tx.insumo.findUnique({ where: { codigo: r.codigoInsumo } });
+      const insumo = await tx.insumo.findFirst({ where: { codigo: r.codigoInsumo, empresaId } });
       if (!insumo) {
         errores.push(`Fila ${r.fila}: residual — insumo "${r.codigoInsumo}" no encontrado`);
         continue;
       }
       await tx.materialResidual.create({
         data: {
+          empresaId,
           insumoId: insumo.id,
           altoCm: r.altoCm,
           anchoCm: r.anchoCm,

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -9,10 +10,11 @@ export default async function MuebleImagenesPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { id } = await params;
 
-  const mueble = await prisma.mueble.findUnique({
-    where: { id },
+  const mueble = await prisma.mueble.findFirst({
+    where: { id, empresaId },
     select: {
       id: true,
       nombre: true,

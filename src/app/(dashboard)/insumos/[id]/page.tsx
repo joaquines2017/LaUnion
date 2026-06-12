@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { notFound } from "next/navigation";
 import { FormInsumo } from "@/components/insumos/FormInsumo";
 import { TablaPrecios } from "@/components/insumos/TablaPrecios";
@@ -11,11 +12,12 @@ export default async function DetalleInsumoPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { id } = await params;
 
   const [insumo, categorias, proveedores, historial, config] = await Promise.all([
-    prisma.insumo.findUnique({
-      where: { id },
+    prisma.insumo.findFirst({
+      where: { id, empresaId },
       include: {
         categoria: true,
         precios: {
@@ -24,8 +26,8 @@ export default async function DetalleInsumoPage({
         },
       },
     }),
-    prisma.categoriaInsumo.findMany({ orderBy: { nombre: "asc" } }),
-    prisma.proveedor.findMany({ where: { estado: "activo" }, orderBy: { nombre: "asc" } }),
+    prisma.categoriaInsumo.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
+    prisma.proveedor.findMany({ where: { empresaId, estado: "activo" }, orderBy: { nombre: "asc" } }),
     prisma.historialPrecio.findMany({
       where: {
         precioProveedor: { insumoId: id },

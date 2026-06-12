@@ -1,16 +1,16 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { redirect } from "next/navigation";
 import { GestionUsuarios } from "@/components/configuracion/GestionUsuarios";
 
 export default async function UsuariosPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
+  const { session, empresaId } = await requireEmpresaPage();
   if ((session.user as { role?: string }).role !== "administrador") {
     redirect("/configuracion");
   }
 
   const usuarios = await prisma.usuario.findMany({
+    where: { empresaId },
     orderBy: { createdAt: "asc" },
     select: {
       id: true,

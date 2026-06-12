@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { Decimal } from "@prisma/client/runtime/library";
 import { registrarLog } from "@/lib/auditoria";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id: muebleId } = await params;
+
+  const mueble = await prisma.mueble.findFirst({ where: { id: muebleId, empresaId }, select: { id: true } });
+  if (!mueble) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   const versiones = await prisma.versionDespiece.findMany({
     where: { muebleId },
@@ -57,10 +61,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 // POST /api/muebles/[id]/versiones  { versionId }  → restaurar esa versión
 export async function POST(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId, session } = ctx;
 
   const { id: muebleId } = await params;
+
+  const mueble = await prisma.mueble.findFirst({ where: { id: muebleId, empresaId }, select: { id: true } });
+  if (!mueble) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+
   const { versionId } = await req.json();
 
   const version = await prisma.versionDespiece.findUnique({ where: { id: versionId } });
@@ -159,6 +168,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     accion: "DESPIECE_RESTAURADO",
     entidad: "Mueble",
     entidadId: muebleId,
+    empresaId,
     datosNuevos: { versionRestaurada: version.numeroVersion, costoTotal },
   });
 

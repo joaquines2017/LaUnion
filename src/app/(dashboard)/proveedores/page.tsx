@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -18,6 +19,7 @@ export default async function ProveedoresPage({
     pageSize?: string;
   }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { q, estado, page, pageSize } = await searchParams;
 
   const estadoFiltro = estado ?? "activo";
@@ -26,6 +28,7 @@ export default async function ProveedoresPage({
   const skip = (paginaActual - 1) * itemsPorPagina;
 
   const where = {
+    empresaId,
     estado: estadoFiltro as "activo" | "inactivo",
     ...(q
       ? {

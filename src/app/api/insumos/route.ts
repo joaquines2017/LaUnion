@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 
 const insumoSchema = z.object({
@@ -15,8 +15,9 @@ const insumoSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { searchParams } = new URL(req.url);
   const buscar = searchParams.get("buscar") ?? "";
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
   const pageSize = Number(searchParams.get("pageSize") || 20);
 
   const where = {
+    empresaId,
     estado: "activo" as const,
     categoriaId: categoriaId ?? undefined,
     OR: buscar
@@ -72,8 +74,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const body = await req.json();
   const parsed = insumoSchema.safeParse(body);
@@ -83,7 +86,7 @@ export async function POST(req: NextRequest) {
 
   // Verificar que el código no exista
   const existe = await prisma.insumo.findUnique({
-    where: { codigo: parsed.data.codigo },
+    where: { empresaId_codigo: { empresaId, codigo: parsed.data.codigo } },
   });
   if (existe) {
     return NextResponse.json(
@@ -92,6 +95,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const insumo = await prisma.insumo.create({ data: parsed.data });
+  const insumo = await prisma.insumo.create({ data: { ...parsed.data, empresaId } });
   return NextResponse.json(insumo, { status: 201 });
 }

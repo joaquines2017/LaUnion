@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireEmpresa } from "@/lib/empresa";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -7,9 +8,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
+
   const { id } = await params;
 
-  const mueble = await prisma.mueble.findUnique({ where: { id } });
+  const mueble = await prisma.mueble.findFirst({ where: { id, empresaId } });
   if (!mueble) return NextResponse.json({ error: "Mueble no encontrado" }, { status: 404 });
 
   const formData = await req.formData();

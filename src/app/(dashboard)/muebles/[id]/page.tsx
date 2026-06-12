@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -11,11 +12,12 @@ export default async function DetalleMueblePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { id } = await params;
 
   const [mueble, categorias, config] = await Promise.all([
-    prisma.mueble.findUnique({
-      where: { id },
+    prisma.mueble.findFirst({
+      where: { id, empresaId },
       include: {
         categoria: true,
         imagenes: { orderBy: { orden: "asc" }, select: { id: true, url: true, filename: true, orden: true } },
@@ -55,7 +57,7 @@ export default async function DetalleMueblePage({
         },
       },
     }),
-    prisma.categoriaMueble.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.categoriaMueble.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
     prisma.configuracionGlobal.findUnique({ where: { id: "1" } }),
   ]);
 

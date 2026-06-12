@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { GestionPrecios } from "@/components/precios/GestionPrecios";
 import { Suspense } from "react";
 
@@ -12,6 +13,7 @@ export default async function PreciosPage({
     page?: string;
   }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { q, proveedorId, categoriaId, page } = await searchParams;
 
   const paginaActual = Math.max(1, Number(page) || 1);
@@ -22,6 +24,7 @@ export default async function PreciosPage({
     estado: "vigente" as const,
     ...(proveedorId ? { proveedorId } : {}),
     insumo: {
+      empresaId,
       estado: "activo" as const,
       ...(categoriaId ? { categoriaId } : {}),
       ...(q
@@ -59,8 +62,8 @@ export default async function PreciosPage({
       },
     }),
     prisma.precioProveedor.count({ where }),
-    prisma.proveedor.findMany({ where: { estado: "activo" }, orderBy: { nombre: "asc" } }),
-    prisma.categoriaInsumo.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.proveedor.findMany({ where: { empresaId, estado: "activo" }, orderBy: { nombre: "asc" } }),
+    prisma.categoriaInsumo.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
     prisma.configuracionGlobal.findUnique({ where: { id: "1" } }),
   ]);
 

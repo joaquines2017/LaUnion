@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { getListaCorte, parseSortKeys, sortFilas } from "@/lib/lista-corte";
 import ExcelJS from "exceljs";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { searchParams } = new URL(req.url);
   const sortKeys  = parseSortKeys(searchParams.get("sort"));
-  const filas     = await getListaCorte();
+  const filas     = await getListaCorte(empresaId);
   const ordenadas = sortFilas(filas, sortKeys);
 
   const wb = new ExcelJS.Workbook();

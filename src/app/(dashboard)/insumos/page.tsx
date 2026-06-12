@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -19,6 +20,7 @@ export default async function InsumosPage({
     pageSize?: string;
   }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { categoriaId, q, estado, page, pageSize } = await searchParams;
 
   const estadoFiltro = estado ?? "activo";
@@ -27,6 +29,7 @@ export default async function InsumosPage({
   const skip = (paginaActual - 1) * itemsPorPagina;
 
   const where = {
+    empresaId,
     estado: estadoFiltro as "activo" | "inactivo",
     categoriaId: categoriaId ?? undefined,
     ...(q
@@ -55,7 +58,7 @@ export default async function InsumosPage({
       },
     }),
     prisma.insumo.count({ where }),
-    prisma.categoriaInsumo.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.categoriaInsumo.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
   ]);
 
   return (

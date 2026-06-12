@@ -46,14 +46,14 @@ export function sortFilas(filas: FilaCorte[], keys: SortKey[]): FilaCorte[] {
   });
 }
 
-export async function getListaCorte(filters?: {
+export async function getListaCorte(empresaId: string, filters?: {
   muebleId?: string;
   insumoId?: string;
 }): Promise<FilaCorte[]> {
   const materiales = await prisma.despieceMaterial.findMany({
     where: {
       medidas: { not: null },
-      mueble: { estado: "activo" },
+      mueble: { estado: "activo", empresaId },
       ...(filters?.muebleId ? { muebleId: filters.muebleId } : {}),
       ...(filters?.insumoId ? { insumoId: filters.insumoId } : {}),
     },

@@ -48,6 +48,7 @@ function getPrecioInsumo(insumo: {
 }
 
 export async function compararResidual(
+  empresaId: string,
   insumoId: string,
   retazoAltoCm: number,
   retazoAnchoCm: number,
@@ -70,6 +71,7 @@ export async function compararResidual(
   const insumosFiltro = insumoRetazo.espesormm != null
     ? await prisma.insumo.findMany({
         where: {
+          empresaId,
           espesormm: insumoRetazo.espesormm,
           altoM: { not: null },
           anchoM: { not: null },
@@ -90,7 +92,7 @@ export async function compararResidual(
         },
       })
     : await prisma.insumo.findMany({
-        where: { id: insumoId },
+        where: { id: insumoId, empresaId },
         select: {
           id: true,
           descripcion: true,

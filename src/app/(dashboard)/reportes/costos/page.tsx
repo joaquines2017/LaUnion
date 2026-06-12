@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import Link from "next/link";
 import { Suspense } from "react";
 import { formatearPrecio } from "@/lib/formato";
@@ -16,6 +17,7 @@ export default async function ReporteCostosPage({
     pageSize?: string;
   }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { categoriaId, q, page, pageSize } = await searchParams;
 
   const paginaActual = Math.max(1, Number(page) || 1);
@@ -23,6 +25,7 @@ export default async function ReporteCostosPage({
   const skip = (paginaActual - 1) * itemsPorPagina;
 
   const where = {
+    empresaId,
     estado: "activo" as const,
     categoriaId: categoriaId ?? undefined,
     ...(q
@@ -47,7 +50,7 @@ export default async function ReporteCostosPage({
       },
     }),
     prisma.mueble.count({ where }),
-    prisma.categoriaMueble.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.categoriaMueble.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
   ]);
 
   const costoTotalPagina = muebles.reduce((s, m) => s + Number(m.costoActual), 0);

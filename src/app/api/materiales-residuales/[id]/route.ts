@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -15,8 +15,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
   const body = await req.json();
@@ -24,6 +25,9 @@ export async function PATCH(
   if (!parsed.success) {
     return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
   }
+
+  const existe = await prisma.materialResidual.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!existe) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   const item = await prisma.materialResidual.update({
     where: { id },
@@ -37,10 +41,15 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
+
+  const existe = await prisma.materialResidual.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!existe) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+
   await prisma.materialResidual.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 
 const proveedorSchema = z.object({
@@ -13,8 +13,9 @@ const proveedorSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { searchParams } = new URL(req.url);
   const buscar = searchParams.get("buscar") ?? "";
@@ -23,6 +24,7 @@ export async function GET(req: NextRequest) {
   const pageSize = Number(searchParams.get("pageSize") || 20);
 
   const where = {
+    empresaId,
     estado: incluirInactivos ? undefined : "activo",
     nombre: buscar ? { contains: buscar, mode: "insensitive" as const } : undefined,
   };
@@ -44,8 +46,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const body = await req.json();
   const parsed = proveedorSchema.safeParse(body);
@@ -53,6 +56,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
   }
 
-  const proveedor = await prisma.proveedor.create({ data: parsed.data });
+  const proveedor = await prisma.proveedor.create({ data: { ...parsed.data, empresaId } });
   return NextResponse.json(proveedor, { status: 201 });
 }

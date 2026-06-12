@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { FormConfiguracion } from "@/components/configuracion/FormConfiguracion";
 
 export default async function ConfiguracionPage() {
+  await requireEmpresaPage();
   const config = await prisma.configuracionGlobal.upsert({
     where: { id: "1" },
     update: {},

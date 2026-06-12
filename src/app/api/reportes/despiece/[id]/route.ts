@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ReporteDespiece } from "@/components/reportes/ReporteDespiece";
 import React from "react";
@@ -9,13 +9,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
 
-  const mueble = await prisma.mueble.findUnique({
-    where: { id },
+  const mueble = await prisma.mueble.findFirst({
+    where: { id, empresaId },
     include: {
       categoria: true,
       materiales: {

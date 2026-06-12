@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -12,11 +13,12 @@ export default async function DetalleProveedorPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { id } = await params;
 
   const [proveedor, insumosActivos, categorias, config] = await Promise.all([
-    prisma.proveedor.findUnique({
-      where: { id },
+    prisma.proveedor.findFirst({
+      where: { id, empresaId },
       include: {
         precios: {
           where: { estado: "vigente" },
@@ -36,7 +38,7 @@ export default async function DetalleProveedorPage({
       },
     }),
     prisma.insumo.findMany({
-      where: { estado: "activo" },
+      where: { empresaId, estado: "activo" },
       orderBy: [{ categoria: { nombre: "asc" } }, { descripcion: "asc" }],
       select: {
         id: true,
@@ -46,7 +48,7 @@ export default async function DetalleProveedorPage({
         categoria: { select: { nombre: true } },
       },
     }),
-    prisma.categoriaInsumo.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.categoriaInsumo.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
     prisma.configuracionGlobal.findUnique({ where: { id: "1" } }),
   ]);
 

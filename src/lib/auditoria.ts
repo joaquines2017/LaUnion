@@ -5,6 +5,7 @@ export async function registrarLog(opts: {
   accion: string;
   entidad: string;
   entidadId: string;
+  empresaId?: string | null;
   datosAnteriores?: unknown;
   datosNuevos?: unknown;
 }) {
@@ -15,6 +16,7 @@ export async function registrarLog(opts: {
         accion: opts.accion,
         entidad: opts.entidad,
         entidadId: opts.entidadId,
+        empresaId: opts.empresaId ?? undefined,
         datosAnteriores: opts.datosAnteriores ? (opts.datosAnteriores as object) : undefined,
         datosNuevos: opts.datosNuevos ? (opts.datosNuevos as object) : undefined,
       },

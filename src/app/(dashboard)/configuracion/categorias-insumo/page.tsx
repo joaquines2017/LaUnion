@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { GestionCatalogo } from "@/components/configuracion/GestionCatalogo";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 export default async function CategoriasInsumoPage() {
+  const { empresaId } = await requireEmpresaPage();
   const categorias = await prisma.categoriaInsumo.findMany({
+    where: { empresaId },
     orderBy: { nombre: "asc" },
     include: { _count: { select: { insumos: true } } },
   });

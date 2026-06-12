@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { GestionCatalogo } from "@/components/configuracion/GestionCatalogo";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 export default async function UnidadesMedidaPage() {
+  const { empresaId } = await requireEmpresaPage();
   const unidades = await prisma.unidadMedida.findMany({
+    where: { empresaId },
     orderBy: { nombre: "asc" },
   });
 
@@ -14,7 +17,7 @@ export default async function UnidadesMedidaPage() {
       id: u.id,
       nombre: u.nombre,
       descripcion: u.descripcion,
-      _count: { insumos: await prisma.insumo.count({ where: { unidadMedida: u.nombre } }) },
+      _count: { insumos: await prisma.insumo.count({ where: { unidadMedida: u.nombre, empresaId } }) },
     }))
   );
 

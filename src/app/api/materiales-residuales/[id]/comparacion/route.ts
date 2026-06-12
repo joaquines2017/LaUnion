@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { compararResidual } from "@/lib/comparacion-residuales";
 import { z } from "zod";
 
@@ -8,18 +8,19 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
-  const residual = await prisma.materialResidual.findUnique({ where: { id } });
+  const residual = await prisma.materialResidual.findFirst({ where: { id, empresaId } });
   if (!residual) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   const config = await prisma.configuracionGlobal.findUnique({ where: { id: "1" } });
   const factorDesperdicio = config?.factorDesperdicio ?? 1.1;
 
   const resultado = await compararResidual(
-    residual.insumoId, residual.altoCm, residual.anchoCm,
+    empresaId, residual.insumoId, residual.altoCm, residual.anchoCm,
     factorDesperdicio, id, residual.cantidad
   );
 
@@ -39,11 +40,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
-  const residual = await prisma.materialResidual.findUnique({ where: { id } });
+  const residual = await prisma.materialResidual.findFirst({ where: { id, empresaId } });
   if (!residual) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   const body = await req.json();
@@ -51,6 +53,14 @@ export async function POST(
   if (!parsed.success) return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
 
   const { asignaciones } = parsed.data;
+
+  if (asignaciones.length > 0) {
+    const muebleIds = asignaciones.map((a) => a.muebleId);
+    const count = await prisma.mueble.count({ where: { id: { in: muebleIds }, empresaId } });
+    if (count !== new Set(muebleIds).size) {
+      return NextResponse.json({ error: "Uno o más muebles no son válidos" }, { status: 400 });
+    }
+  }
 
   // Cuántas piezas tenía asignadas este retazo antes del cambio
   const prevAsignaciones = await prisma.reservaResidual.findMany({
@@ -109,10 +119,14 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
+
+  const residual = await prisma.materialResidual.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!residual) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   const prev = await prisma.reservaResidual.findMany({
     where: { materialResidualId: id },

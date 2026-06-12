@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresaPage } from "@/lib/empresa";
 import {
   Package,
   Truck,
@@ -12,7 +12,7 @@ import {
 import { formatearPrecio, formatearFecha } from "@/lib/formato";
 import Link from "next/link";
 
-async function getDashboardStats() {
+async function getDashboardStats(empresaId: string) {
   const config = await prisma.configuracionGlobal.findUnique({ where: { id: "1" } });
   const vigenciaDias = config?.vigenciaPrecioDias ?? 30;
   const fechaLimite = new Date();
@@ -28,15 +28,15 @@ async function getDashboardStats() {
     ultimosPrecios,
     costoPromedio,
   ] = await Promise.all([
-    prisma.insumo.count({ where: { estado: "activo" } }),
-    prisma.proveedor.count({ where: { estado: "activo" } }),
-    prisma.mueble.count({ where: { estado: "activo" } }),
-    prisma.mueble.count({ where: { estado: "activo", costoActual: 0 } }),
+    prisma.insumo.count({ where: { empresaId, estado: "activo" } }),
+    prisma.proveedor.count({ where: { empresaId, estado: "activo" } }),
+    prisma.mueble.count({ where: { empresaId, estado: "activo" } }),
+    prisma.mueble.count({ where: { empresaId, estado: "activo", costoActual: 0 } }),
     prisma.precioProveedor.count({
-      where: { estado: "vigente", fechaVigencia: { lt: fechaLimite } },
+      where: { estado: "vigente", fechaVigencia: { lt: fechaLimite }, insumo: { empresaId } },
     }),
     prisma.mueble.findMany({
-      where: { estado: "activo", costoActual: { gt: 0 } },
+      where: { empresaId, estado: "activo", costoActual: { gt: 0 } },
       orderBy: { costoActual: "desc" },
       take: 5,
       select: {
@@ -48,6 +48,7 @@ async function getDashboardStats() {
       },
     }),
     prisma.historialPrecio.findMany({
+      where: { precioProveedor: { insumo: { empresaId } } },
       orderBy: { fechaCambio: "desc" },
       take: 6,
       include: {
@@ -60,7 +61,7 @@ async function getDashboardStats() {
       },
     }),
     prisma.mueble.aggregate({
-      where: { estado: "activo", costoActual: { gt: 0 } },
+      where: { empresaId, estado: "activo", costoActual: { gt: 0 } },
       _avg: { costoActual: true },
     }),
   ]);
@@ -79,8 +80,8 @@ async function getDashboardStats() {
 }
 
 export default async function DashboardPage() {
-  const session = await auth();
-  const stats = await getDashboardStats();
+  const { session, empresaId } = await requireEmpresaPage();
+  const stats = await getDashboardStats(empresaId);
 
   return (
     <div className="space-y-6">

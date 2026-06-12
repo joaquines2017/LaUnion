@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import { FormMueble } from "@/components/muebles/FormMueble";
 
 export default async function NuevoMueblePage() {
+  const { empresaId } = await requireEmpresaPage();
   const categorias = await prisma.categoriaMueble.findMany({
+    where: { empresaId },
     orderBy: { nombre: "asc" },
   });
 

@@ -6,13 +6,6 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Iniciando seed...");
 
-  // ── Configuración global ────────────────────────────────────────────────
-  await prisma.configuracionGlobal.upsert({
-    where: { id: "1" },
-    update: {},
-    create: { id: "1", factorDesperdicio: 1.10, moneda: "ARS", vigenciaPrecioDias: 30 },
-  });
-
   // ── Superadmin ──────────────────────────────────────────────────────────
   const superadminHash = await bcrypt.hash("superadmin1234", 12);
   await prisma.usuario.upsert({
@@ -51,6 +44,13 @@ async function main() {
     },
   });
 
+  // ── Configuración global ────────────────────────────────────────────────
+  await prisma.configuracionGlobal.upsert({
+    where: { id: "1" },
+    update: {},
+    create: { id: "1", empresaId: empresaLaUnion.id, factorDesperdicio: 1.10, moneda: "ARS", vigenciaPrecioDias: 30 },
+  });
+
   // ── Categorías de insumos ───────────────────────────────────────────────
   const categoriasData = [
     { nombre: "Melamina", descripcion: "Placas de melamina en distintos colores y espesores" },
@@ -75,9 +75,9 @@ async function main() {
   const categorias: Record<string, string> = {};
   for (const cat of categoriasData) {
     const c = await prisma.categoriaInsumo.upsert({
-      where: { nombre: cat.nombre },
+      where: { empresaId_nombre: { empresaId: empresaLaUnion.id, nombre: cat.nombre } },
       update: {},
-      create: cat,
+      create: { ...cat, empresaId: empresaLaUnion.id },
     });
     categorias[cat.nombre] = c.id;
   }
@@ -91,9 +91,9 @@ async function main() {
   ];
   for (const nombre of catsMueble) {
     await prisma.categoriaMueble.upsert({
-      where: { nombre },
+      where: { empresaId_nombre: { empresaId: empresaLaUnion.id, nombre } },
       update: {},
-      create: { nombre },
+      create: { nombre, empresaId: empresaLaUnion.id },
     });
   }
   console.log(`✓ ${catsMueble.length} categorías de muebles`);
@@ -115,7 +115,7 @@ async function main() {
     const p = await prisma.proveedor.upsert({
       where: { id: prov.nombre }, // usar nombre como clave temporal
       update: {},
-      create: { nombre: prov.nombre },
+      create: { nombre: prov.nombre, empresaId: empresaLaUnion.id },
     });
     proveedores[prov.nombre] = p.id;
   }
@@ -583,7 +583,7 @@ async function main() {
     }
 
     const insumo = await prisma.insumo.upsert({
-      where: { codigo: ins.codigo },
+      where: { empresaId_codigo: { empresaId: empresaLaUnion.id, codigo: ins.codigo } },
       update: {
         descripcion: ins.descripcion,
         unidadMedida: ins.unidadMedida,
@@ -592,6 +592,7 @@ async function main() {
         anchoM: ins.anchoM ?? null,
       },
       create: {
+        empresaId: empresaLaUnion.id,
         codigo: ins.codigo,
         descripcion: ins.descripcion,
         categoriaId: catId,

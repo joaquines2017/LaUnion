@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ReporteCostosPDF } from "@/components/reportes/ReporteCostosPDF";
 import React from "react";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { searchParams } = new URL(req.url);
   const categoriaId = searchParams.get("categoriaId");
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
   const [muebles, categorias] = await Promise.all([
     prisma.mueble.findMany({
       where: {
+        empresaId,
         estado,
         categoriaId: categoriaId ?? undefined,
       },
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
         _count: { select: { materiales: true, insumos: true } },
       },
     }),
-    prisma.categoriaMueble.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.categoriaMueble.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
   ]);
 
   const categoriaSeleccionada = categoriaId

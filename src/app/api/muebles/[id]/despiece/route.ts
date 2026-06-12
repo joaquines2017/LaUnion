@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 import { Decimal } from "@prisma/client/runtime/library";
 import { registrarLog } from "@/lib/auditoria";
@@ -35,10 +35,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { id } = await params;
+  const mueble = await prisma.mueble.findFirst({ where: { id, empresaId }, select: { id: true } });
+  if (!mueble) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+
   const [materiales, insumos] = await Promise.all([
     prisma.despieceMaterial.findMany({
       where: { muebleId: id },
@@ -91,10 +95,15 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId, session } = ctx;
 
   const { id: muebleId } = await params;
+
+  const mueble = await prisma.mueble.findFirst({ where: { id: muebleId, empresaId }, select: { id: true } });
+  if (!mueble) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+
   const body = await req.json();
   const parsed = despieceSchema.safeParse(body);
   if (!parsed.success) {
@@ -180,6 +189,7 @@ export async function PUT(
     accion: "DESPIECE_MODIFICADO",
     entidad: "Mueble",
     entidadId: muebleId,
+    empresaId,
     datosNuevos: { costoTotal, version: numeroVersion },
   });
 

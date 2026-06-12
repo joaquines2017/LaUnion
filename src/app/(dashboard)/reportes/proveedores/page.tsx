@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireEmpresaPage } from "@/lib/empresa";
 import Link from "next/link";
 import { formatearPrecio, formatearFecha } from "@/lib/formato";
 import { CheckCircle2 } from "lucide-react";
@@ -8,12 +9,14 @@ export default async function ComparativoProveedoresPage({
 }: {
   searchParams: Promise<{ categoriaId?: string }>;
 }) {
+  const { empresaId } = await requireEmpresaPage();
   const { categoriaId } = await searchParams;
 
   const [categorias, insumos] = await Promise.all([
-    prisma.categoriaInsumo.findMany({ orderBy: { nombre: "asc" } }),
+    prisma.categoriaInsumo.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
     prisma.insumo.findMany({
       where: {
+        empresaId,
         estado: "activo",
         categoriaId: categoriaId ?? undefined,
         precios: { some: { estado: "vigente" } },
@@ -38,7 +41,7 @@ export default async function ComparativoProveedoresPage({
     }
   }
   const proveedores = await prisma.proveedor.findMany({
-    where: { id: { in: [...todosProveedoresIds] }, estado: "activo" },
+    where: { id: { in: [...todosProveedoresIds] }, empresaId, estado: "activo" },
     orderBy: { nombre: "asc" },
   });
 

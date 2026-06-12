@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 
 const muebleSchema = z.object({
@@ -10,8 +10,9 @@ const muebleSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? "";
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
   const pageSize = Number(searchParams.get("pageSize") || 20);
 
   const where = {
+    empresaId,
     estado,
     categoriaId: categoriaId ?? undefined,
     ...(q
@@ -51,8 +53,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const body = await req.json();
   const parsed = muebleSchema.safeParse(body);
@@ -61,7 +64,7 @@ export async function POST(req: NextRequest) {
   }
 
   const existe = await prisma.mueble.findUnique({
-    where: { codigo: parsed.data.codigo },
+    where: { empresaId_codigo: { empresaId, codigo: parsed.data.codigo } },
   });
   if (existe) {
     return NextResponse.json(
@@ -70,6 +73,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const mueble = await prisma.mueble.create({ data: parsed.data });
+  const mueble = await prisma.mueble.create({ data: { ...parsed.data, empresaId } });
   return NextResponse.json(mueble, { status: 201 });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireEmpresa } from "@/lib/empresa";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -12,14 +12,15 @@ const createSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const { searchParams } = new URL(req.url);
   const estado = searchParams.get("estado") ?? "disponible";
 
   const items = await prisma.materialResidual.findMany({
-    where: estado !== "todos" ? { estado } : undefined,
+    where: estado !== "todos" ? { empresaId, estado } : { empresaId },
     orderBy: { createdAt: "desc" },
     include: {
       insumo: {
@@ -47,8 +48,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  const ctx = await requireEmpresa();
+  if (ctx instanceof NextResponse) return ctx;
+  const { empresaId } = ctx;
 
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
@@ -56,6 +58,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Datos inválidos", detail: parsed.error.flatten() }, { status: 400 });
   }
 
-  const item = await prisma.materialResidual.create({ data: parsed.data });
+  const insumo = await prisma.insumo.findFirst({ where: { id: parsed.data.insumoId, empresaId }, select: { id: true } });
+  if (!insumo) return NextResponse.json({ error: "Insumo no encontrado" }, { status: 404 });
+
+  const item = await prisma.materialResidual.create({ data: { ...parsed.data, empresaId } });
   return NextResponse.json(item, { status: 201 });
 }

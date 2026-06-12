@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
     accion:    "EMPRESA_CREADA",
     entidad:   "Empresa",
     entidadId: empresa.id,
+    empresaId: empresa.id,
     datosNuevos: { nombre, dominio, adminEmail },
   });
 
