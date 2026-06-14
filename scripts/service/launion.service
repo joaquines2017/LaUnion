@@ -14,7 +14,7 @@ RestartSec=10
 # Variables de entorno
 Environment=NODE_ENV=production
 Environment=PORT=3000
-Environment=HOSTNAME=0.0.0.0
+Environment=HOSTNAME=127.0.0.1
 EnvironmentFile=/opt/launion-app/.env
 
 # Límites de recursos
