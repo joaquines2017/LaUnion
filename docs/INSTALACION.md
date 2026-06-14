@@ -7,21 +7,29 @@ Red LAN (192.168.100.x)
 │
 ├── launion-db   (192.168.100.190)  — PostgreSQL 18, SSH :2190
 │     Puerto 5432 solo accesible desde launion-app
+│     Fail2ban (SSH)
 │
 └── launion-app  (192.168.100.191)  — Node.js 20 + Next.js 16, SSH :2190
-      Puerto 3000 — servicio systemd launion.service
+      Nginx (:80→:443, certificado autofirmado) → proxy a 127.0.0.1:3000
+      Servicio systemd launion.service (bindea solo 127.0.0.1:3000)
+      Fail2ban (SSH)
       Directorio: /usr/fileserver/apps/launion-app/
 ```
 
-> Para exposición pública agregar un tercer contenedor `nginx-proxy` con Nginx + SSL + Fail2ban.
-> Consultar `scripts/setup-proxy.sh` para ese paso.
+Acceso a la app: `https://192.168.100.191` (certificado autofirmado — el
+navegador pide aceptar la excepción la primera vez).
+
+> Para exposición pública con dominio propio agregar un tercer contenedor
+> `nginx-proxy` con Nginx + Certbot + Fail2ban + UFW + No-IP DDNS.
+> Consultar `scripts/setup-proxy.sh` para ese paso (no reemplaza al Nginx
+> autofirmado de `launion-app`, es una capa adicional).
 
 ---
 
 ## Requisitos previos
 
 - Proxmox VE con soporte LXC
-- Plantilla LXC: **Ubuntu 22.04 (jammy)**
+- Plantilla LXC: **Ubuntu 24.04 (noble)**
 - Acceso root a Proxmox
 - Conexión a Internet desde los contenedores (para descarga de paquetes)
 - El código del proyecto disponible en un repositorio Git
@@ -36,7 +44,7 @@ En la UI de Proxmox o por consola del host:
 
 ```bash
 # Crear contenedor LXC (ajustar VMID, storage y red según tu entorno)
-pct create 190 local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
+pct create 190 local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
   --hostname launion-db \
   --memory 512 \
   --swap 512 \
@@ -140,7 +148,7 @@ psql -h 192.168.100.190 -U launion_user -d launion -c "SELECT version();"
 ### 2.1 Crear el contenedor en Proxmox
 
 ```bash
-pct create 191 local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
+pct create 191 local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst \
   --hostname launion-app \
   --memory 1024 \
   --swap 512 \
@@ -181,7 +189,7 @@ bash /tmp/setup-app.sh \
   --repo-url "https://github.com/TU_USUARIO/launion-app.git" \
   --db-url "postgresql://launion_user:TU_PASSWORD_DB@192.168.100.190:5432/launion" \
   --auth-secret "$AUTH_SECRET" \
-  --app-url "http://192.168.100.191:3000"
+  --app-url "https://192.168.100.191"
 ```
 
 > **Directorio en producción actual:** `/usr/fileserver/apps/launion-app/`
@@ -209,7 +217,7 @@ DATABASE_URL="postgresql://launion_user:PASSWORD@192.168.100.190:5432/launion"
 # Auth
 AUTH_SECRET="generado-con-openssl-rand-base64-32"
 AUTH_TRUST_HOST=true
-NEXTAUTH_URL="http://192.168.100.191:3000"
+NEXTAUTH_URL="https://192.168.100.191"
 
 # Email (Gmail SMTP con App Password)
 # Configurar en: Google Account → Seguridad → Contraseñas de aplicación
@@ -223,7 +231,73 @@ NODE_ENV=production
 > Si no configurás las variables de email, la app funciona pero la creación de empresas
 > no enviará las credenciales por correo (mostrará un error no fatal en los logs).
 
-### 2.5 Configurar logging persistente
+### 2.5 HTTPS con Nginx (certificado autofirmado) — RNFS-004
+
+```bash
+# Desde tu máquina local
+scp -P 2190 scripts/setup-nginx-selfsigned.sh joaquin@192.168.100.191:/tmp/
+
+# En el contenedor (como root)
+bash /tmp/setup-nginx-selfsigned.sh 192.168.100.191
+```
+
+El script realiza automáticamente:
+- Instala `nginx`
+- Genera un certificado autofirmado (10 años, CN/SAN = IP indicada) en
+  `/etc/nginx/ssl/launion.{crt,key}` si no existe
+- Configura el vhost `launion`: `:80` redirige a `:443`, y `:443 ssl` hace
+  `proxy_pass` a `http://127.0.0.1:3000`
+- Habilita y recarga `nginx`
+
+Además, ajustar `launion.service` para que Next.js bindee solo a localhost
+(ya no se accede directo al puerto 3000 desde la LAN):
+
+```bash
+# /etc/systemd/system/launion.service
+Environment=HOSTNAME=127.0.0.1
+```
+
+```bash
+systemctl daemon-reload
+systemctl restart launion
+```
+
+Y actualizar `NEXTAUTH_URL` en `.env` a `https://192.168.100.191` (sin
+`:3000`), como se muestra en la sección 2.4.
+
+A partir de este paso, la app se accede vía **`https://192.168.100.191`**. El
+navegador mostrará una advertencia de certificado no confiable (autofirmado)
+— aceptar la excepción una vez.
+
+### 2.6 Fail2ban para SSH — RNFS-005 (ambos contenedores)
+
+Este paso se aplica tanto en `launion-app` (`.191`) como en `launion-db`
+(`.190`):
+
+```bash
+# Desde tu máquina local
+scp -P 2190 scripts/setup-fail2ban.sh joaquin@192.168.100.191:/tmp/
+scp -P 2190 scripts/setup-fail2ban.sh joaquin@192.168.100.190:/tmp/
+
+# En cada contenedor (como root)
+bash /tmp/setup-fail2ban.sh
+```
+
+El script realiza automáticamente:
+- Instala `fail2ban`
+- Escribe `/etc/fail2ban/jail.local` con el jail `sshd`: puerto `2190`,
+  `maxretry=3`, `findtime=5m`, `bantime=1h`, `ignoreip=127.0.0.1/8 ::1
+  192.168.100.0/24` (whitelistea toda la LAN para evitar autobloqueos)
+- Habilita y recarga `fail2ban`
+
+Verificar:
+
+```bash
+systemctl is-active fail2ban   # → active
+fail2ban-client status sshd    # → jail cargado, Currently banned: 0
+```
+
+### 2.7 Configurar logging persistente
 
 ```bash
 # Persistir los logs de journald (por defecto son volátiles en LXC)
@@ -244,7 +318,7 @@ EOF
 systemctl restart systemd-journald
 ```
 
-### 2.6 Instalar script de visualización de logs
+### 2.8 Instalar script de visualización de logs
 
 ```bash
 cat > /usr/local/bin/launion-logs << 'SCRIPT'
@@ -283,17 +357,22 @@ SCRIPT
 chmod +x /usr/local/bin/launion-logs
 ```
 
-### 2.7 Verificación final
+### 2.9 Verificación final
 
 ```bash
 # Estado del servicio
 systemctl status launion
+systemctl status nginx
+systemctl status fail2ban
 
 # Ver logs recientes
 launion-logs -n 20
 
-# Verificar que la app responde
+# Verificar que la app responde (directo, solo localhost)
 curl -s http://localhost:3000 | head -5
+
+# Verificar que nginx responde con HTTPS (certificado autofirmado → -k)
+curl -sk https://localhost | head -5
 
 # Verificar conectividad con la DB
 journalctl -u launion -n 30 | grep -i "prisma\|database\|error"

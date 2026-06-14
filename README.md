@@ -85,68 +85,76 @@ GMAIL_APP_PASSWORD="xxxx xxxx xxxx xxxx"
 
 ## Producción en Proxmox LXC
 
-La arquitectura usa **3 contenedores LXC** Ubuntu 22.04:
+Despliegue actual: **2 contenedores LXC** Ubuntu 24.04 en la red interna
+`192.168.100.x` (sin dominio público ni exposición a internet):
 
 ```
-Internet
-  │ (No-IP DDNS + port forwarding 80/443 en el router)
-  ▼
-Proxmox Host
-├── nginx-proxy — Nginx + SSL + Fail2ban  (ej. IP 192.168.1.9)  ← único expuesto
-├── launion-app — Node.js 20 standalone   (ej. IP 192.168.1.11) ← solo LAN
-└── launion-db  — PostgreSQL 16 nativo    (ej. IP 192.168.1.10) ← solo LAN
+Red LAN 192.168.100.x
+├── launion-app (192.168.100.191) — Next.js (systemd, 127.0.0.1:3000)
+│                                    + Nginx (SSL autofirmado, :80→:443)
+│                                    + Fail2ban (SSH)
+└── launion-db  (192.168.100.190) — PostgreSQL 18
+                                     + Fail2ban (SSH)
 ```
 
-### 1. Configurar contenedor de base de datos (`launion-db`)
+Acceso: `https://192.168.100.191` (certificado autofirmado — el navegador
+pide aceptar la excepción la primera vez).
+
+Guía completa paso a paso: [`docs/INSTALACION.md`](docs/INSTALACION.md).
+
+### 1. Contenedor de base de datos (`launion-db`)
 
 ```bash
 git clone https://github.com/<usuario>/launion-app.git /tmp/launion
 bash /tmp/launion/scripts/setup-db.sh \
   --db-password "PASSWORD_SEGURO" \
-  --app-ip "192.168.1.11"
+  --app-ip "192.168.100.191"
 ```
 
-### 2. Configurar contenedor de la app (`launion-app`)
+### 2. Contenedor de la app (`launion-app`)
 
 ```bash
 git clone https://github.com/<usuario>/launion-app.git /tmp/launion
 bash /tmp/launion/scripts/setup-app.sh \
   --repo-url "https://github.com/<usuario>/launion-app.git" \
-  --db-url "postgresql://launion_user:PASSWORD_SEGURO@192.168.1.10:5432/launion" \
+  --db-url "postgresql://launion_user:PASSWORD_SEGURO@192.168.100.190:5432/launion" \
   --auth-secret "$(openssl rand -base64 32)" \
-  --app-url "http://192.168.1.11:3000"
+  --app-url "https://192.168.100.191"
 ```
 
-### 3. Configurar contenedor del reverse proxy (`nginx-proxy`)
+### 3. HTTPS con certificado autofirmado (RNFS-004)
+
+En `launion-app`, instala Nginx con un certificado autofirmado y hace
+`proxy_pass` a `127.0.0.1:3000` (la app pasa a bindear solo localhost):
 
 ```bash
-git clone https://github.com/<usuario>/launion-app.git /tmp/launion
-bash /tmp/launion/scripts/setup-proxy.sh \
-  --dominio   "launion.ddns.net" \
-  --app-ip    "192.168.1.11" \
-  --noip-user "tu_usuario_noip" \
-  --noip-pass "tu_password_noip"
+bash /tmp/launion/scripts/setup-nginx-selfsigned.sh 192.168.100.191
 ```
 
-Este script instala Nginx, Certbot (SSL automático), Fail2ban, UFW y el cliente No-IP DDNS.
+### 4. Fail2ban para SSH (RNFS-005)
 
-### 4. Agregar una empresa nueva al proxy
-
-Cuando se suma una nueva empresa con su propio dominio:
+En **ambos** contenedores (`launion-db` y `launion-app`), banea IPs con +3
+intentos fallidos de SSH en 5 min (whitelistea la LAN `192.168.100.0/24`):
 
 ```bash
-# En el LXC nginx-proxy:
-bash /tmp/launion/scripts/agregar-empresa-proxy.sh \
-  --dominio "donjose.ddns.net" \
-  --app-ip  "192.168.1.11"
+bash /tmp/launion/scripts/setup-fail2ban.sh
 ```
 
 ### 5. Actualizar a una nueva versión
 
 ```bash
-cd /opt/launion-app
+cd /usr/fileserver/apps/launion-app
 sudo -u launion bash scripts/deploy.sh
 ```
+
+### Exposición pública (opcional, no usado actualmente)
+
+Para exponer la app a internet con un dominio propio, agregar un tercer
+contenedor `nginx-proxy` (Nginx + Certbot + Fail2ban + UFW + No-IP DDNS) con
+`scripts/setup-proxy.sh`, y `scripts/agregar-empresa-proxy.sh` para sumar
+dominios de empresas adicionales a ese proxy. No reemplaza al Nginx
+autofirmado del paso 3 — es una capa adicional para el caso de exposición a
+internet.
 
 ---
 

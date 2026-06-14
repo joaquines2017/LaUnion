@@ -97,7 +97,13 @@ import { Fragment } from "react";
 - `VersionDespiece` → snapshot de cada guardado del despiece (materiales + insumos como JSON)
 - `MaterialResidual` → retazo con dimensiones; `ReservaResidual` lo asigna a un `Mueble` con cantidad
 - `LogAuditoria` → registro de acciones; escribir siempre con `registrarLog()`
-- `ConfiguracionGlobal` → singleton con id `"1"` (factorDesperdicio, moneda, vigenciaPrecioDias)
+  (`empresaId` opcional — las acciones de superadmin sobre una empresa lo
+  llevan, para que aparezcan en el `/api/auditoria` de esa empresa)
+- `ConfiguracionGlobal` → 1:1 con `Empresa` (`empresaId NOT NULL @unique`, FK `ON DELETE CASCADE`); `factorDesperdicio`, `moneda`, `vigenciaPrecioDias` por empresa
+
+Aislamiento multi-tenant: casi todas las tablas de negocio tienen `empresaId`
+y las rutas API/páginas filtran con `requireEmpresa()` /
+`requireEmpresaPage()` (`src/lib/empresa.ts`).
 
 ---
 
@@ -144,4 +150,3 @@ Login → administrador/operador/lectura → /  (dashboard operativo)
 - Exportar materiales residuales a Excel/PDF
 - Dashboard de métricas de residuales
 - Notificaciones por precios vencidos (solo alerta en dashboard)
-- Aislamiento de datos por empresa en BD (actualmente todos comparten la misma DB — multi-tenancy por row pendiente)
