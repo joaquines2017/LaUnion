@@ -10,7 +10,6 @@ import {
   BarChart3,
   Upload,
   Settings,
-  LogOut,
   ChevronDown,
   Tag,
   Ruler,
@@ -21,9 +20,9 @@ import {
   Users,
   ClipboardList,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { LogoutButton } from "@/components/layout/LogoutButton";
 
 interface NavChild {
   href: string;
@@ -182,13 +181,7 @@ export function Sidebar() {
 
       {/* Cerrar sesión */}
       <div className="px-3 py-3 border-t border-sidebar-border">
-        <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-100"
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          Cerrar sesión
-        </button>
+        <LogoutButton />
       </div>
     </aside>
   );

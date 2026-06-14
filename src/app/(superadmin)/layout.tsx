@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Building2, LogOut } from "lucide-react";
+import { Building2 } from "lucide-react";
+import { LogoutButton } from "@/components/layout/LogoutButton";
 
 export default async function SuperadminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -30,15 +31,7 @@ export default async function SuperadminLayout({ children }: { children: React.R
           </Link>
         </nav>
         <div className="px-3 py-3 border-t border-sidebar-border">
-          <form action="/api/auth/signout" method="POST">
-            <button
-              type="submit"
-              className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              Cerrar sesión
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </aside>
 
