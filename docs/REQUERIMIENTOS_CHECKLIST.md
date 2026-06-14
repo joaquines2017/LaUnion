@@ -20,7 +20,7 @@ el orden de la tabla.
 | RNFS-001 | Implementar Firewall (UFW) en ambos servidores: SSH:2190 desde LAN, puerto 3000 desde red interna, bloquear el resto. | CRÍTICA | ⏸️ Diferido | Se resuelve al final del plan. |
 | RNFS-002 | Rate limiting en endpoints de autenticación: máx. 5 intentos fallidos por IP en 15 min con bloqueo temporal. | CRÍTICA | ✅ Completado | `src/lib/rate-limit.ts`: contador en memoria por IP con ventana deslizante de 15 min (máx. 5 intentos fallidos), suficiente porque la app corre como una única instancia systemd. `src/lib/auth.ts`: `authorize(credentials, request)` obtiene la IP desde `x-forwarded-for` (Next.js standalone la completa automáticamente con `req.socket.remoteAddress` si no viene seteada por un proxy). Si la IP está bloqueada, lanza `TooManyAttemptsError` (subclase de `CredentialsSignin` con `code: "too-many-attempts"`) antes de validar credenciales — el bloqueo aplica incluso con credenciales correctas. Cada intento fallido (input inválido, usuario inexistente/inactivo, password incorrecta) suma al contador; un login exitoso lo limpia. `src/app/login/page.tsx` muestra un mensaje específico para ese código. Verificado en producción: build limpio, 57 tests OK, deploy OK; 6 intentos fallidos consecutivos desde la misma IP devuelven `error=CredentialsSignin&code=too-many-attempts` a partir del 6º, y un intento posterior con credenciales correctas también es bloqueado mientras dure la ventana. |
 | RNFS-003 | Security headers HTTP en `next.config.ts`: CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, HSTS (cuando haya HTTPS). | ALTA | ✅ Completado | `next.config.ts`: headers globales vía `headers()`. CSP permisiva (`unsafe-inline`/`unsafe-eval`, requerido por Next.js sin nonces). HSTS declarado para cuando RNFS-004 esté activo. |
-| RNFS-004 | HTTPS con certificado SSL: contenedor `nginx-proxy` con Certbot o certificado autofirmado para red interna. | ALTA | ⬜ Pendiente | |
+| RNFS-004 | HTTPS con certificado SSL: contenedor `nginx-proxy` con Certbot o certificado autofirmado para red interna. | ALTA | ✅ Completado | Se eligió la alternativa "certificado autofirmado para red interna" (no hay dominio público ni port-forwarding en la red `192.168.100.x`). Nuevo `scripts/setup-nginx-selfsigned.sh`: instala nginx directamente en el contenedor de la app (`.191`, no se crea un contenedor `nginx-proxy` dedicado), genera un certificado autofirmado (10 años, CN/SAN `192.168.100.191`) y configura un vhost que redirige `:80 → :443` y hace `proxy_pass` a `127.0.0.1:3000` con `X-Forwarded-*`. `scripts/service/launion.service` ahora bindea `HOSTNAME=127.0.0.1` (puerto 3000 deja de estar expuesto en la LAN, sin depender del firewall de RNFS-001). `NEXTAUTH_URL` actualizado a `https://192.168.100.191`. Los headers de seguridad (incl. `Strict-Transport-Security` de RNFS-003) llegan sin cambios vía proxy. La arquitectura documentada en `README.md`/`setup-proxy.sh` (contenedor `nginx-proxy` + Certbot + No-IP DDNS) queda como opción futura si se expone un dominio público. Los navegadores muestran advertencia de certificado no confiable (esperado; hay que aceptar la excepción una vez). Verificado en producción: `nginx -t` OK, `curl -Ik http://192.168.100.191` → 301 a https, `curl -Ik https://192.168.100.191` → 200 con todos los security headers, `curl http://192.168.100.191:3000` ya no responde, `/login` 200 OK, `journalctl` de `launion` y `nginx` sin errores. |
 | RNFS-005 | Instalar y configurar Fail2ban en ambos servidores: banear IPs con +3 intentos fallidos SSH en 5 min. | ALTA | ⬜ Pendiente | |
 | RNFS-006 | Aumentar mínimo de contraseña de 6 a 8 caracteres + al menos 1 número o carácter especial (auth.ts y schema de usuarios). | MEDIA | ✅ Completado | `src/lib/password.ts`: nuevo `passwordSchema` (8+ caracteres, ≥1 número o símbolo) usado en alta/edición de usuarios y admin de empresa. El login (`auth.ts`) mantiene mínimo 6 a propósito para no bloquear cuentas existentes; la seguridad del login se refuerza con RNFS-002. |
 
@@ -67,9 +67,11 @@ de datos por empresa, configuración (`factorDesperdicio`, `moneda`,
 empresa quedan correctamente auditadas en el contexto de esa empresa. El
 sistema está listo para incorporar nuevas empresas reales (la creación de la
 config por defecto es perezosa, al primer acceso de cada empresa). No queda
-ningún requerimiento funcional (RFF) crítico/alto pendiente. El resto de las
-mejoras (RNFS-004/005, y RNFS-001/RNFB diferidos) pueden implementarse de
-forma incremental sin interrumpir el servicio.
+ningún requerimiento funcional (RFF) crítico/alto pendiente. RNFS-004 (HTTPS)
+también está completo, vía nginx + certificado autofirmado en `.191`. Queda
+pendiente RNFS-005 (Fail2ban), y diferidos al final RNFS-001 (firewall) y
+RNFB-001/002/003 (backups), que pueden implementarse de forma incremental sin
+interrumpir el servicio.
 
 ## Historial de cambios de este checklist
 
@@ -123,3 +125,14 @@ forma incremental sin interrumpir el servicio.
   dominio de "La Union" desde `/superadmin` generó un `EMPRESA_MODIFICADA`
   con `empresaId` poblado. Con esto no queda ningún RFF crítico/alto
   pendiente.
+- **2026-06-13**: Completado RNFS-004 (HTTPS). Nuevo
+  `scripts/setup-nginx-selfsigned.sh`: nginx en el contenedor `.191` con
+  certificado autofirmado (CN/SAN `192.168.100.191`), vhost `:80 → :443` y
+  `proxy_pass` a `127.0.0.1:3000`. `scripts/service/launion.service` bindea
+  `HOSTNAME=127.0.0.1`; `NEXTAUTH_URL` actualizado a `https://`. Se eligió la
+  alternativa "certificado autofirmado para red interna" del propio
+  requerimiento, sin crear el contenedor `nginx-proxy` dedicado descrito en
+  `README.md` (queda como opción futura si se expone un dominio público).
+  Commit `3ff2d17`. Verificado en producción: redirect HTTP→HTTPS, headers de
+  seguridad presentes vía proxy, puerto 3000 ya no accesible desde la LAN,
+  `/login` 200, logs sin errores.
