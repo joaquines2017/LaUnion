@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { LogoutButton } from "@/components/layout/LogoutButton";
+import { NotificacionesPrecios, type PrecioVencidoItem } from "@/components/layout/NotificacionesPrecios";
 
 interface NavChild {
   href: string;
@@ -70,7 +71,14 @@ const navItems: NavItem[] = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  preciosVencidos: {
+    items: PrecioVencidoItem[];
+    total: number;
+  };
+}
+
+export function Sidebar({ preciosVencidos }: SidebarProps) {
   const pathname = usePathname();
 
   // Mapa de qué secciones están expandidas (inicialmente las activas)
@@ -91,13 +99,16 @@ export function Sidebar() {
   return (
     <aside className="flex flex-col w-[240px] h-screen sticky top-0 bg-sidebar border-r border-sidebar-border">
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-sidebar-border">
-        <span className="block text-lg font-bold text-white tracking-tight">
-          LaUnion
-        </span>
-        <span className="block text-[11px] text-sidebar-foreground/60 mt-0.5">
-          Sistema de Costeo
-        </span>
+      <div className="px-6 py-5 border-b border-sidebar-border flex items-start justify-between">
+        <div>
+          <span className="block text-lg font-bold text-white tracking-tight">
+            LaUnion
+          </span>
+          <span className="block text-[11px] text-sidebar-foreground/60 mt-0.5">
+            Sistema de Costeo
+          </span>
+        </div>
+        <NotificacionesPrecios preciosVencidos={preciosVencidos} />
       </div>
 
       {/* Navegación */}
