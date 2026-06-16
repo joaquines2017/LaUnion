@@ -23,7 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { LogoutButton } from "@/components/layout/LogoutButton";
-import { NotificacionesPrecios, type PrecioVencidoItem } from "@/components/layout/NotificacionesPrecios";
+import { NotificacionesPrecios } from "@/components/layout/NotificacionesPrecios";
 
 interface NavChild {
   href: string;
@@ -71,14 +71,7 @@ const navItems: NavItem[] = [
   },
 ];
 
-interface SidebarProps {
-  preciosVencidos: {
-    items: PrecioVencidoItem[];
-    total: number;
-  };
-}
-
-export function Sidebar({ preciosVencidos }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
 
   // Mapa de qué secciones están expandidas (inicialmente las activas)
@@ -108,7 +101,7 @@ export function Sidebar({ preciosVencidos }: SidebarProps) {
             Sistema de Costeo
           </span>
         </div>
-        <NotificacionesPrecios preciosVencidos={preciosVencidos} />
+        <NotificacionesPrecios />
       </div>
 
       {/* Navegación */}
