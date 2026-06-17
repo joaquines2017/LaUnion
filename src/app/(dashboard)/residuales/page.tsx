@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TablaResiduales } from "@/components/residuales/TablaResiduales";
 import { FormResidual } from "@/components/residuales/FormResidual";
+import { ResumenPlacas } from "@/components/residuales/ResumenPlacas";
 
 interface InsumoRef {
   id: string;
@@ -119,6 +120,9 @@ export default function ResidualesPage() {
           </span>
         )}
       </div>
+
+      {/* Resumen por placa */}
+      {!cargando && <ResumenPlacas items={items} />}
 
       {/* Formulario inline */}
       {mostrarForm && (
