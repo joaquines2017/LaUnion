@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { Save, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
@@ -229,26 +229,28 @@ export function DetalleMueble({
             </TabsTrigger>
           </TabsList>
 
-          {costoTotal > 0 && (
-            <div className="flex items-center gap-4">
-              <div className="text-right">
+          <div className="flex items-center gap-2 flex-wrap">
+            {costoTotal > 0 && (
+              <div className="text-right mr-2">
                 <div className="text-xs text-muted-foreground">Costo total</div>
                 <div className="text-lg font-bold font-mono tabular-nums text-foreground">
                   {formatearPrecio(costoTotal)}
                 </div>
               </div>
-              <Button onClick={guardarDespiece} disabled={guardando} size="sm">
-                <Save className="h-3.5 w-3.5 mr-1.5" />
-                {guardando ? "Guardando…" : "Guardar"}
-              </Button>
-            </div>
-          )}
-          {costoTotal === 0 && (
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(`/api/reportes/despiece/${mueble.id}`, "_blank")}
+            >
+              <FileText className="h-3.5 w-3.5 mr-1.5 text-red-500" />
+              PDF
+            </Button>
             <Button onClick={guardarDespiece} disabled={guardando} size="sm">
               <Save className="h-3.5 w-3.5 mr-1.5" />
               {guardando ? "Guardando…" : "Guardar"}
             </Button>
-          )}
+          </div>
         </div>
 
         {/* Tab: Datos del mueble + imágenes */}

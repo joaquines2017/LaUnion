@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Plus, X, Search } from "lucide-react";
+import { Plus, X, Search, FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TablaResiduales } from "@/components/residuales/TablaResiduales";
@@ -95,10 +95,30 @@ export default function ResidualesPage() {
             Retazos disponibles y su aprovechamiento en muebles
           </p>
         </div>
-        <Button onClick={() => setMostrarForm((v) => !v)}>
-          {mostrarForm ? <X className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
-          {mostrarForm ? "Cancelar" : "Agregar retazo"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open("/api/materiales-residuales/excel", "_blank")}
+            disabled={cargando}
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" />
+            Excel
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open("/api/materiales-residuales/pdf", "_blank")}
+            disabled={cargando}
+          >
+            <FileText className="h-4 w-4 mr-1.5 text-red-500" />
+            PDF
+          </Button>
+          <Button onClick={() => setMostrarForm((v) => !v)}>
+            {mostrarForm ? <X className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+            {mostrarForm ? "Cancelar" : "Agregar retazo"}
+          </Button>
+        </div>
       </div>
 
       {/* Métricas rápidas */}
