@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireEmpresaPage } from "@/lib/empresa";
 import Link from "next/link";
+import { Suspense } from "react";
 import { formatearPrecio, formatearFecha } from "@/lib/formato";
+import { FiltroCategorias } from "@/components/shared/FiltroCategorias";
 import { CheckCircle2 } from "lucide-react";
 
 export default async function ComparativoProveedoresPage({
@@ -59,31 +61,9 @@ export default async function ComparativoProveedoresPage({
       </div>
 
       {/* Filtro por categoría */}
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href="/reportes/proveedores"
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            !categoriaId
-              ? "bg-primary text-primary-foreground"
-              : "bg-card text-muted-foreground border border-border hover:bg-secondary"
-          }`}
-        >
-          Todas
-        </Link>
-        {categorias.map((c) => (
-          <Link
-            key={c.id}
-            href={`/reportes/proveedores?categoriaId=${c.id}`}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              categoriaId === c.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-card text-muted-foreground border border-border hover:bg-secondary"
-            }`}
-          >
-            {c.nombre}
-          </Link>
-        ))}
-      </div>
+      <Suspense>
+        <FiltroCategorias categorias={categorias} />
+      </Suspense>
 
       {insumos.length === 0 ? (
         <div className="bg-card rounded-lg border border-border p-12 text-center text-muted-foreground text-sm">

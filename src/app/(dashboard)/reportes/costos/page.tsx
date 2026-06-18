@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { formatearPrecio } from "@/lib/formato";
 import { PaginadorTabla } from "@/components/shared/PaginadorTabla";
 import { BotonesExportacion } from "@/components/reportes/BotonesExportacion";
+import { FiltroCategorias } from "@/components/shared/FiltroCategorias";
 import { FileDown } from "lucide-react";
 
 export default async function ReporteCostosPage({
@@ -78,32 +79,10 @@ export default async function ReporteCostosPage({
         </Suspense>
       </div>
 
-      {/* Filtros por categoría */}
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/reportes/costos${q ? `?q=${q}` : ""}`}
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            !categoriaId
-              ? "bg-primary text-primary-foreground"
-              : "bg-card text-muted-foreground border border-border hover:bg-secondary"
-          }`}
-        >
-          Todas
-        </Link>
-        {categorias.map((c) => (
-          <Link
-            key={c.id}
-            href={`/reportes/costos?categoriaId=${c.id}${q ? `&q=${q}` : ""}`}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              categoriaId === c.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-card text-muted-foreground border border-border hover:bg-secondary"
-            }`}
-          >
-            {c.nombre}
-          </Link>
-        ))}
-      </div>
+      {/* Filtro por categoría */}
+      <Suspense>
+        <FiltroCategorias categorias={categorias} />
+      </Suspense>
 
       {/* Tabla */}
       <div className="bg-card rounded-lg border border-border shadow-card overflow-hidden">
