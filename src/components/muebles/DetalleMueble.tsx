@@ -211,19 +211,19 @@ export function DetalleMueble({
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
             <TabsTrigger value="mueble">Datos del mueble</TabsTrigger>
-            <TabsTrigger value="despiece">
-              Despiece
-              {cantMateriales > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded font-mono">
-                  {cantMateriales}
-                </span>
-              )}
-            </TabsTrigger>
             <TabsTrigger value="insumos">
               Insumos
               {cantInsumos > 0 && (
                 <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded font-mono">
                   {cantInsumos}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="despiece">
+              Despiece
+              {cantMateriales > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded font-mono">
+                  {cantMateriales}
                 </span>
               )}
             </TabsTrigger>
