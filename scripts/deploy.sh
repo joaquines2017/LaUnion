@@ -23,6 +23,9 @@ sudo -u "$APP_USER" git pull origin main
 
 # ── 2. Instalar/actualizar dependencias ───────────────────────────────────────
 echo "[2/5] Instalando dependencias..."
+# Limpieza explícita antes de npm ci: evita que binarios corruptos de EROFS
+# anteriores bloqueen la instalación.
+sudo -u "$APP_USER" rm -rf node_modules
 sudo -u "$APP_USER" npm ci --legacy-peer-deps
 
 # ── 3. Regenerar cliente Prisma y aplicar migraciones ─────────────────────────
