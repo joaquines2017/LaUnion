@@ -154,44 +154,41 @@ export function NotificacionesPrecios() {
 
           {/* Lista */}
           <div className="overflow-y-auto">
-            {items.length === 0 ? (
+            {loading && itemsNoLeidos.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">Cargando...</div>
+            ) : itemsNoLeidos.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                {loading ? "Cargando..." : "No hay precios vencidos."}
+                {items.length === 0 ? "No hay precios vencidos." : "Todas las alertas están leídas."}
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {items.map((item) => {
-                  const leido = leidas.has(item.insumoId);
-                  return (
-                    <div
-                      key={item.insumoId}
-                      className={`flex items-start gap-2 px-3 py-2.5 transition-colors ${leido ? "opacity-50" : "hover:bg-secondary/50"}`}
+                {itemsNoLeidos.map((item) => (
+                  <div
+                    key={item.insumoId}
+                    className="flex items-start gap-2 px-3 py-2.5 hover:bg-secondary/50 transition-colors"
+                  >
+                    <Link
+                      href={`/insumos/${item.insumoId}`}
+                      onClick={() => setOpen(false)}
+                      className="flex-1 min-w-0"
                     >
-                      <Link
-                        href={`/insumos/${item.insumoId}`}
-                        onClick={() => setOpen(false)}
-                        className="flex-1 min-w-0"
-                      >
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {item.descripcion}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {item.proveedorNombre} · hace {item.diasVencido}{" "}
-                          {item.diasVencido === 1 ? "día" : "días"}
-                        </p>
-                      </Link>
-                      {!leido && (
-                        <button
-                          onClick={() => marcarLeida(item.insumoId)}
-                          className="shrink-0 mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                          title="Marcar como leída"
-                        >
-                          <Check className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {item.descripcion}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {item.proveedorNombre} · hace {item.diasVencido}{" "}
+                        {item.diasVencido === 1 ? "día" : "días"}
+                      </p>
+                    </Link>
+                    <button
+                      onClick={() => marcarLeida(item.insumoId)}
+                      className="shrink-0 mt-0.5 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                      title="Marcar como leída"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
