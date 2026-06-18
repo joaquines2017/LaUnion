@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireEmpresaPage } from "@/lib/empresa";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, FileSpreadsheet, FileText } from "lucide-react";
 import { formatearPrecio } from "@/lib/formato";
 import { FiltrosBusqueda } from "@/components/shared/FiltrosBusqueda";
 import { AccionesTabla } from "@/components/shared/AccionesTabla";
@@ -61,10 +61,16 @@ export default async function InsumosPage({
     prisma.categoriaInsumo.findMany({ where: { empresaId }, orderBy: { nombre: "asc" } }),
   ]);
 
+  const exportSearch = new URLSearchParams();
+  if (q) exportSearch.set("q", q);
+  if (categoriaId) exportSearch.set("categoriaId", categoriaId);
+  exportSearch.set("estado", estadoFiltro);
+  const exportQS = `?${exportSearch.toString()}`;
+
   return (
     <div className="space-y-5">
       {/* Encabezado */}
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Insumos</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -72,12 +78,26 @@ export default async function InsumosPage({
             {estadoFiltro === "inactivo" && " · inactivos"}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/insumos/nuevo">
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nuevo insumo
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href={`/api/insumos/excel${exportQS}`} target="_blank">
+              <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" />
+              Excel
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={`/api/insumos/pdf${exportQS}`} target="_blank">
+              <FileText className="h-4 w-4 mr-1.5 text-red-500" />
+              PDF
+            </a>
+          </Button>
+          <Button asChild>
+            <Link href="/insumos/nuevo">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Nuevo insumo
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Búsqueda y filtro activo/inactivo */}
