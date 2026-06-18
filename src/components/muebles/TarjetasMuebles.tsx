@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ImageIcon, AlertTriangle } from "lucide-react";
+import { AlertTriangle, ImageIcon } from "lucide-react";
 import { formatearPrecio } from "@/lib/formato";
 import { AccionesTabla } from "@/components/shared/AccionesTabla";
+import { TarjetaImagenCiclo } from "./TarjetaImagenCiclo";
 import type { MuebleRow } from "./TablaMuebles";
 
 interface Props {
@@ -36,7 +37,6 @@ export function TarjetasMuebles({ muebles, estadoFiltro, q }: Props) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
       {muebles.map((m) => {
-        const img = m.imagenes[0]?.url ?? null;
         const costo = Number(m.costoActual);
         const items = m._count.materiales + m._count.insumos;
 
@@ -47,26 +47,15 @@ export function TarjetasMuebles({ muebles, estadoFiltro, q }: Props) {
               estadoFiltro === "inactivo" ? "opacity-60" : ""
             }`}
           >
-            {/* Foto — es un link al detalle */}
-            <Link href={`/muebles/${m.id}`} className="relative block aspect-[4/3] bg-secondary/40 overflow-hidden">
-              {img ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={img}
-                  alt={m.nombre}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <ImageIcon className="h-10 w-10 text-muted-foreground/15" />
-                </div>
-              )}
+            {/* Foto — área de imagen con ciclo; el nombre de abajo es el link al detalle */}
+            <div className="relative aspect-[4/3] bg-secondary/40 overflow-hidden">
+              <TarjetaImagenCiclo imagenes={m.imagenes} nombre={m.nombre} />
 
               {/* Badge categoría */}
-              <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/55 text-white backdrop-blur-sm leading-tight max-w-[75%] truncate">
+              <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/55 text-white backdrop-blur-sm leading-tight max-w-[75%] truncate z-10">
                 {m.categoria.nombre}
               </span>
-            </Link>
+            </div>
 
             {/* Info — también link */}
             <Link href={`/muebles/${m.id}`} className="px-3 pt-2.5 pb-1 flex flex-col gap-0.5 flex-1">

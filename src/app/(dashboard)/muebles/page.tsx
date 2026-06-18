@@ -3,7 +3,7 @@ import { requireEmpresaPage } from "@/lib/empresa";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle, FileSpreadsheet, FileText } from "lucide-react";
 import { formatearPrecio } from "@/lib/formato";
 import { FiltrosBusqueda } from "@/components/shared/FiltrosBusqueda";
 import { FiltroCategorias } from "@/components/shared/FiltroCategorias";
@@ -68,10 +68,18 @@ export default async function MueblesPage({
   const costoTotal = Number(statsResult._sum.costoActual ?? 0);
   const totalPaginas = Math.ceil(totalItems / itemsPorPagina);
 
+  const exportQS = (() => {
+    const p = new URLSearchParams();
+    if (q) p.set("q", q);
+    if (categoriaId) p.set("categoriaId", categoriaId);
+    p.set("estado", estadoFiltro);
+    return p.toString() ? `?${p.toString()}` : "";
+  })();
+
   return (
     <div className="space-y-5">
       {/* Encabezado */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex items-end justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Muebles</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -79,12 +87,26 @@ export default async function MueblesPage({
             {estadoFiltro === "inactivo" && " · inactivos"}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/muebles/nuevo">
-            <Plus className="h-4 w-4 mr-1.5" />
-            Nuevo mueble
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href={`/api/muebles/excel${exportQS}`} target="_blank">
+              <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" />
+              Excel
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={`/api/muebles/pdf${exportQS}`} target="_blank">
+              <FileText className="h-4 w-4 mr-1.5 text-red-500" />
+              PDF
+            </a>
+          </Button>
+          <Button asChild>
+            <Link href="/muebles/nuevo">
+              <Plus className="h-4 w-4 mr-1.5" />
+              Nuevo mueble
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Stats strip */}
