@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Pencil, Check, X, Search, AlertTriangle, Plus } from "lucide-react";
+import { Pencil, Check, X, Search, AlertTriangle, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { formatearPrecio, formatearFecha, formatearNumeroInput, parsearNumero } from "@/lib/formato";
 import { ModalRecalculo } from "@/components/precios/ModalRecalculo";
+import { ModalAjusteMasivo } from "@/components/precios/ModalAjusteMasivo";
 import type { ResultadoCascada } from "@/lib/recalculo-cascada";
 
 export interface PrecioFila {
@@ -78,6 +79,9 @@ export function GestionPrecios({
   const [editId, setEditId] = useState<string | null>(null);
   const [editValor, setEditValor] = useState("");
   const [guardando, setGuardando] = useState(false);
+
+  // Modal ajuste masivo
+  const [ajusteAbierto, setAjusteAbierto] = useState(false);
 
   // Modal recálculo
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -166,9 +170,20 @@ export function GestionPrecios({
           </Select>
         </div>
 
-        <span className="text-xs text-muted-foreground ml-auto self-center">
-          {totalItems} precio{totalItems !== 1 ? "s" : ""}
-        </span>
+        <div className="ml-auto flex items-center gap-3 self-center">
+          <span className="text-xs text-muted-foreground">
+            {totalItems} precio{totalItems !== 1 ? "s" : ""}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setAjusteAbierto(true)}
+            disabled={totalItems === 0}
+          >
+            <Sliders className="h-3.5 w-3.5 mr-1.5" />
+            Ajuste masivo
+          </Button>
+        </div>
       </div>
 
       {/* ── Tabla ── */}
@@ -277,6 +292,17 @@ export function GestionPrecios({
           </div>
         )}
       </div>
+
+      <ModalAjusteMasivo
+        open={ajusteAbierto}
+        onClose={() => setAjusteAbierto(false)}
+        onAplicado={() => router.refresh()}
+        proveedorIdFiltro={proveedorIdFiltro}
+        categoriaIdFiltro={categoriaIdFiltro}
+        q={q}
+        totalFiltrado={totalItems}
+        precioEjemplo={precios[0] ? Number(precios[0].precio) : 0}
+      />
 
       <ModalRecalculo
         open={modalAbierto}
