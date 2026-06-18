@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, FileSpreadsheet, FileText } from "lucide-react";
 import { formatearPrecio } from "@/lib/formato";
 import { FiltrosBusqueda } from "@/components/shared/FiltrosBusqueda";
+import { FiltroCategorias } from "@/components/shared/FiltroCategorias";
 import { AccionesTabla } from "@/components/shared/AccionesTabla";
 import { PaginadorTabla } from "@/components/shared/PaginadorTabla";
 import { Suspense } from "react";
@@ -100,37 +101,13 @@ export default async function InsumosPage({
         </div>
       </div>
 
-      {/* Búsqueda y filtro activo/inactivo */}
+      {/* Búsqueda, estado y categoría */}
       <Suspense>
-        <FiltrosBusqueda placeholder="Buscar por código o descripción…" />
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <FiltrosBusqueda placeholder="Buscar por código o descripción…" />
+          <FiltroCategorias categorias={categorias} />
+        </div>
       </Suspense>
-
-      {/* Filtros por categoría */}
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/insumos?estado=${estadoFiltro}${q ? `&q=${q}` : ""}`}
-          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            !categoriaId
-              ? "bg-primary text-primary-foreground"
-              : "bg-card text-muted-foreground border border-border hover:bg-secondary"
-          }`}
-        >
-          Todas
-        </Link>
-        {categorias.map((c) => (
-          <Link
-            key={c.id}
-            href={`/insumos?categoriaId=${c.id}&estado=${estadoFiltro}${q ? `&q=${q}` : ""}`}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              categoriaId === c.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-card text-muted-foreground border border-border hover:bg-secondary"
-            }`}
-          >
-            {c.nombre}
-          </Link>
-        ))}
-      </div>
 
       {/* Tabla */}
       <div className="bg-card rounded-lg border border-border shadow-card overflow-hidden">

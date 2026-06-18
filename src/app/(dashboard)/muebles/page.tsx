@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { FiltrosBusqueda } from "@/components/shared/FiltrosBusqueda";
+import { FiltroCategorias } from "@/components/shared/FiltroCategorias";
 import { PaginadorTabla } from "@/components/shared/PaginadorTabla";
 import { TablaMuebles } from "@/components/muebles/TablaMuebles";
 import { Suspense } from "react";
@@ -77,37 +78,13 @@ export default async function MueblesPage({
         </Button>
       </div>
 
-      {/* Búsqueda */}
+      {/* Búsqueda, estado y categoría */}
       <Suspense>
-        <FiltrosBusqueda placeholder="Buscar por código o nombre…" />
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+          <FiltrosBusqueda placeholder="Buscar por código o nombre…" />
+          <FiltroCategorias categorias={categorias} />
+        </div>
       </Suspense>
-
-      {/* Filtros por categoría */}
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/muebles?estado=${estadoFiltro}${q ? `&q=${q}` : ""}`}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            !categoriaId
-              ? "bg-primary text-primary-foreground"
-              : "bg-card text-muted-foreground border border-border hover:bg-secondary"
-          }`}
-        >
-          Todos
-        </Link>
-        {categorias.map((c) => (
-          <Link
-            key={c.id}
-            href={`/muebles?categoriaId=${c.id}&estado=${estadoFiltro}${q ? `&q=${q}` : ""}`}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              categoriaId === c.id
-                ? "bg-primary text-primary-foreground"
-                : "bg-card text-muted-foreground border border-border hover:bg-secondary"
-            }`}
-          >
-            {c.nombre}
-          </Link>
-        ))}
-      </div>
 
       {/* Tabla con modal */}
       <div className="bg-card rounded-lg border border-border shadow-card overflow-hidden">
