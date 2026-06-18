@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Upload, Trash2, ImageIcon, ArrowRight } from "lucide-react";
+import { Save, Upload, Trash2, ImageIcon, ArrowRight, ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +35,24 @@ export function FormMueble({ mueble, categorias, imagenesIniciales = [] }: Props
   const [eliminando, setEliminando] = useState<string | null>(null);
   // Mueble recién creado (para habilitar imágenes sin redirigir inmediatamente)
   const [muebleCreado, setMuebleCreado] = useState<Mueble | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const abrirLightbox = useCallback((index: number) => setLightboxIndex(index), []);
+  const cerrarLightbox = useCallback(() => setLightboxIndex(null), []);
+  const irAnterior = useCallback(() => setLightboxIndex(i => i !== null ? (i === 0 ? imagenes.length - 1 : i - 1) : null), [imagenes.length]);
+  const irSiguiente = useCallback(() => setLightboxIndex(i => i !== null ? (i === imagenes.length - 1 ? 0 : i + 1) : null), [imagenes.length]);
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cerrarLightbox();
+      if (e.key === "ArrowLeft") irAnterior();
+      if (e.key === "ArrowRight") irSiguiente();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [lightboxIndex, cerrarLightbox, irAnterior, irSiguiente]);
 
   // El mueble activo puede venir del prop (edición) o del estado (recién creado)
   const muebleActivo = mueble ?? muebleCreado;
@@ -105,6 +122,58 @@ export function FormMueble({ mueble, categorias, imagenesIniciales = [] }: Props
   return (
     /* Layout: una columna en mobile, dos columnas en lg+ */
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && imagenes[lightboxIndex] && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center"
+          onClick={cerrarLightbox}
+        >
+          {/* Cerrar */}
+          <button
+            type="button"
+            onClick={cerrarLightbox}
+            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/40 rounded-full p-2"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
+          {/* Imagen */}
+          <div className="relative max-w-4xl max-h-[85vh] w-full px-14" onClick={e => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imagenes[lightboxIndex].url}
+              alt={imagenes[lightboxIndex].filename}
+              className="max-w-full max-h-[80vh] object-contain mx-auto block rounded-lg shadow-2xl"
+            />
+            {imagenes.length > 1 && (
+              <div className="absolute bottom-[-2rem] left-0 right-0 text-center text-white/60 text-xs">
+                {lightboxIndex + 1} / {imagenes.length}
+              </div>
+            )}
+          </div>
+
+          {/* Flechas */}
+          {imagenes.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); irAnterior(); }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2.5 transition-colors"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); irSiguiente(); }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2.5 transition-colors"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── Columna izquierda: datos ─────────────────────── */}
       <div className="bg-card rounded-xl border border-border shadow-card p-6 space-y-5">
@@ -206,11 +275,18 @@ export function FormMueble({ mueble, categorias, imagenesIniciales = [] }: Props
             {/* Galería */}
             {imagenes.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
-                {imagenes.map(img => (
+                {imagenes.map((img, idx) => (
                   <div key={img.id} className="group relative aspect-square rounded-lg overflow-hidden border border-border bg-secondary/30">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={img.url} alt={img.filename} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => abrirLightbox(idx)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 text-white rounded-full p-1.5 hover:bg-black/80"
+                      >
+                        <ZoomIn className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         type="button"
                         disabled={eliminando === img.id}

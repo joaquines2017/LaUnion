@@ -148,6 +148,7 @@ export function DetalleMueble({
 
   const [guardando, setGuardando] = useState(false);
   const [versionKey, setVersionKey] = useState(0);
+  const [tabActivo, setTabActivo] = useState("mueble");
 
   const costoTotal = insumos.reduce((s, f) => s + f.costoTotal, 0);
 
@@ -207,7 +208,7 @@ export function DetalleMueble({
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="mueble">
+      <Tabs defaultValue="mueble" onValueChange={setTabActivo}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <TabsList>
             <TabsTrigger value="mueble">Datos del mueble</TabsTrigger>
@@ -229,28 +230,30 @@ export function DetalleMueble({
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {costoTotal > 0 && (
-              <div className="text-right mr-2">
-                <div className="text-xs text-muted-foreground">Costo total</div>
-                <div className="text-lg font-bold font-mono tabular-nums text-foreground">
-                  {formatearPrecio(costoTotal)}
+          {tabActivo !== "mueble" && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {costoTotal > 0 && (
+                <div className="text-right mr-2">
+                  <div className="text-xs text-muted-foreground">Costo total</div>
+                  <div className="text-lg font-bold font-mono tabular-nums text-foreground">
+                    {formatearPrecio(costoTotal)}
+                  </div>
                 </div>
-              </div>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(`/api/reportes/despiece/${mueble.id}`, "_blank")}
-            >
-              <FileText className="h-3.5 w-3.5 mr-1.5 text-red-500" />
-              PDF
-            </Button>
-            <Button onClick={guardarDespiece} disabled={guardando} size="sm">
-              <Save className="h-3.5 w-3.5 mr-1.5" />
-              {guardando ? "Guardando…" : "Guardar"}
-            </Button>
-          </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`/api/reportes/despiece/${mueble.id}`, "_blank")}
+              >
+                <FileText className="h-3.5 w-3.5 mr-1.5 text-red-500" />
+                PDF
+              </Button>
+              <Button onClick={guardarDespiece} disabled={guardando} size="sm">
+                <Save className="h-3.5 w-3.5 mr-1.5" />
+                {guardando ? "Guardando…" : "Guardar"}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Tab: Datos del mueble + imágenes */}
