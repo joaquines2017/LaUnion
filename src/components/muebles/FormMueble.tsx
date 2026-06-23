@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Upload, Trash2, ImageIcon, ArrowRight, ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,12 +25,18 @@ interface Props {
   mueble?: Mueble;
   categorias: Categoria[];
   imagenesIniciales?: Imagen[];
+  hideButtons?: boolean;
+  onStateChange?: (s: { loading: boolean; canSave: boolean }) => void;
 }
 
-export function FormMueble({ mueble, categorias, imagenesIniciales = [] }: Props) {
+export function FormMueble({ mueble, categorias, imagenesIniciales = [], hideButtons = false, onStateChange }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [categoriaId, setCategoriaId] = useState(mueble?.categoriaId ?? "");
+
+  useEffect(() => {
+    onStateChange?.({ loading, canSave: !!categoriaId });
+  }, [loading, categoriaId, onStateChange]);
   const [imagenes, setImagenes] = useState<Imagen[]>(imagenesIniciales);
   const [subiendo, setSubiendo] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
@@ -212,30 +219,32 @@ export function FormMueble({ mueble, categorias, imagenesIniciales = [] }: Props
             </Select>
           </div>
 
-          <div className="flex gap-3 pt-2 flex-wrap">
-            {/* Botón guardar: oculto si ya se creó y estamos en modo nuevo */}
-            {!(esNuevo && muebleCreado) && (
-              <Button type="submit" form="form-mueble" disabled={loading || !categoriaId}>
-                <Save className="h-3.5 w-3.5 mr-1.5" />
-                {loading ? "Guardando..." : mueble ? "Guardar cambios" : "Crear mueble"}
-              </Button>
-            )}
-            {/* Ir al detalle (solo después de crear) */}
-            {muebleCreado && (
-              <Button asChild>
-                <Link href={`/muebles/${muebleCreado.id}`}>
-                  Ir al detalle
-                  <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
-                </Link>
-              </Button>
-            )}
-            {/* Cancelar (solo cuando no se creó todavía) */}
-            {!muebleCreado && (
-              <Button type="button" variant="outline" onClick={() => router.back()}>
-                Cancelar
-              </Button>
-            )}
-          </div>
+          {!hideButtons && (
+            <div className="flex gap-3 pt-2 flex-wrap">
+              {/* Botón guardar: oculto si ya se creó y estamos en modo nuevo */}
+              {!(esNuevo && muebleCreado) && (
+                <Button type="submit" form="form-mueble" disabled={loading || !categoriaId}>
+                  <Save className="h-3.5 w-3.5 mr-1.5" />
+                  {loading ? "Guardando..." : mueble ? "Guardar cambios" : "Crear mueble"}
+                </Button>
+              )}
+              {/* Ir al detalle (solo después de crear) */}
+              {muebleCreado && (
+                <Button asChild>
+                  <Link href={`/muebles/${muebleCreado.id}`}>
+                    Ir al detalle
+                    <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                  </Link>
+                </Button>
+              )}
+              {/* Cancelar (solo cuando no se creó todavía) */}
+              {!muebleCreado && (
+                <Button type="button" variant="outline" onClick={() => router.back()}>
+                  Cancelar
+                </Button>
+              )}
+            </div>
+          )}
         </form>
       </div>
 

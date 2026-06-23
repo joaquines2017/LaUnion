@@ -149,6 +149,8 @@ export function DetalleMueble({
   const [guardando, setGuardando] = useState(false);
   const [versionKey, setVersionKey] = useState(0);
   const [tabActivo, setTabActivo] = useState("mueble");
+  const [formLoading, setFormLoading] = useState(false);
+  const [formCanSave, setFormCanSave] = useState(false);
 
   const costoTotal = insumos.reduce((s, f) => s + f.costoTotal, 0);
 
@@ -230,7 +232,28 @@ export function DetalleMueble({
             </TabsTrigger>
           </TabsList>
 
-          {tabActivo !== "mueble" && (
+          {tabActivo === "mueble" ? (
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => router.back()}
+                disabled={formLoading}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                form="form-mueble"
+                size="sm"
+                disabled={formLoading || !formCanSave}
+              >
+                <Save className="h-3.5 w-3.5 mr-1.5" />
+                {formLoading ? "Guardando…" : "Guardar cambios"}
+              </Button>
+            </div>
+          ) : (
             <div className="flex items-center gap-2 flex-wrap">
               {costoTotal > 0 && (
                 <div className="text-right mr-2">
@@ -262,6 +285,8 @@ export function DetalleMueble({
             mueble={mueble}
             categorias={categorias}
             imagenesIniciales={imagenesIniciales}
+            hideButtons
+            onStateChange={(s) => { setFormLoading(s.loading); setFormCanSave(s.canSave); }}
           />
         </TabsContent>
 
