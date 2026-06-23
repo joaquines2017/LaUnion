@@ -38,13 +38,22 @@ echo "[4/5] Construyendo la aplicación..."
 sudo -u "$APP_USER" npm run build
 
 # Copiar archivos estáticos al directorio standalone.
-# Se ejecuta como $APP_USER (no root) y se borra el destino antes de copiar:
-# si quedan archivos propiedad de root de un deploy anterior, el siguiente
-# `npm run build` (corrido como $APP_USER) falla con EACCES al no poder
-# borrarlos, y `cp -r origen destino` anida origen/origen si destino ya existe.
+# Se preservan las imágenes subidas por usuarios (public/uploads) moviéndolas
+# antes de borrar y restaurándolas después: mv es un rename dentro del mismo
+# filesystem, por lo que es instantáneo y no desencadena I/O pesado.
+UPLOADS_SAVE="${APP_DIR}/.uploads_save_$$"
+UPLOADS_SRC="${APP_DIR}/.next/standalone/public/uploads"
+if [ -d "$UPLOADS_SRC" ]; then
+  sudo -u "$APP_USER" mv "$UPLOADS_SRC" "$UPLOADS_SAVE"
+fi
+
 sudo -u "$APP_USER" rm -rf .next/standalone/.next/static .next/standalone/public
 sudo -u "$APP_USER" cp -r .next/static .next/standalone/.next/static
 sudo -u "$APP_USER" cp -r public .next/standalone/public
+
+if [ -d "$UPLOADS_SAVE" ]; then
+  sudo -u "$APP_USER" mv "$UPLOADS_SAVE" "${APP_DIR}/.next/standalone/public/uploads"
+fi
 
 # ── 5. Reiniciar servicio ─────────────────────────────────────────────────────
 echo "[5/5] Reiniciando servicio..."

@@ -4,6 +4,12 @@ import { requireEmpresa } from "@/lib/empresa";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
+// Directorio persistente: variable de entorno o fallback al public/uploads
+// del WorkingDirectory del proceso (en standalone: .next/standalone/public/uploads/).
+function getUploadsDir(): string {
+  return process.env.UPLOADS_BASE_PATH ?? path.join(process.cwd(), "public", "uploads");
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -29,25 +35,19 @@ export async function POST(
     return NextResponse.json({ error: "Formato no permitido" }, { status: 400 });
   }
 
-  // Determinar el orden (el próximo disponible)
   const count = await prisma.muebleImagen.count({ where: { muebleId: id } });
-
   const filename = `${Date.now()}${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads", "muebles", id);
+
+  const uploadsDir = getUploadsDir();
+  const dir = path.join(uploadsDir, "muebles", id);
   await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, filename), Buffer.from(await file.arrayBuffer()));
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(dir, filename), buffer);
-
-  const url = `/uploads/muebles/${id}/${filename}`;
+  // URL servida vía route handler /api/uploads/... (persiste entre deploys)
+  const url = `/api/uploads/muebles/${id}/${filename}`;
 
   const imagen = await prisma.muebleImagen.create({
-    data: {
-      muebleId: id,
-      filename,
-      url,
-      orden: count,
-    },
+    data: { muebleId: id, filename, url, orden: count },
   });
 
   return NextResponse.json(imagen, { status: 201 });

@@ -32,6 +32,16 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  async rewrites() {
+    return [
+      // Redirige URLs legacy /uploads/... al route handler /api/uploads/...
+      // (las imágenes subidas antes del cambio de arquitectura seguirán funcionando)
+      {
+        source: "/uploads/:path*",
+        destination: "/api/uploads/:path*",
+      },
+    ];
+  },
   async headers() {
     return [
       {
