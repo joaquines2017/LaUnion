@@ -23,10 +23,14 @@ sudo -u "$APP_USER" git pull origin main
 
 # ── 2. Instalar/actualizar dependencias ───────────────────────────────────────
 echo "[2/5] Instalando dependencias..."
-# Limpieza explícita antes de npm ci: evita que binarios corruptos de EROFS
-# anteriores bloqueen la instalación.
+# Caché en /run (tmpfs): evita leer/escribir el caché de disco que puede
+# tener sectores malos después de un EROFS. /run es tmpfs y siempre está limpio.
+NPM_CACHE_DIR="/run/npm-cache-${APP_USER}"
+mkdir -p "$NPM_CACHE_DIR"
+chown "${APP_USER}:${APP_USER}" "$NPM_CACHE_DIR"
+# Limpieza explícita de node_modules antes de instalar.
 sudo -u "$APP_USER" rm -rf node_modules
-sudo -u "$APP_USER" npm ci --legacy-peer-deps
+sudo -u "$APP_USER" npm ci --cache "$NPM_CACHE_DIR" --legacy-peer-deps
 
 # ── 3. Regenerar cliente Prisma y aplicar migraciones ─────────────────────────
 echo "[3/5] Aplicando migraciones de base de datos..."
