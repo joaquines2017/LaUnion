@@ -8,9 +8,15 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_USER="launion"
+# Directorio de build en tmpfs: evita I/O pesado sobre el disco de la app,
+# que ha mostrado sectores defectuosos (EROFS recurrente). /run es tmpfs y
+# se limpia en cada reboot, por lo que la operación es siempre sobre RAM.
+BUILD_DIR="/run/launion-build"
+NPM_CACHE_DIR="/run/npm-cache-${APP_USER}"
 
 echo "=== LaUnion — Deploy ==="
 echo "  Directorio: $APP_DIR"
+echo "  Build:      $BUILD_DIR (tmpfs)"
 echo "  Fecha:      $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
@@ -21,43 +27,51 @@ echo "[1/5] Actualizando código..."
 sudo -u "$APP_USER" git checkout -- package.json package-lock.json
 sudo -u "$APP_USER" git pull origin main
 
-# ── 2. Instalar/actualizar dependencias ───────────────────────────────────────
-echo "[2/5] Instalando dependencias..."
-# Caché en /run (tmpfs): evita leer/escribir el caché de disco que puede
-# tener sectores malos después de un EROFS. /run es tmpfs y siempre está limpio.
-NPM_CACHE_DIR="/run/npm-cache-${APP_USER}"
-mkdir -p "$NPM_CACHE_DIR"
-chown "${APP_USER}:${APP_USER}" "$NPM_CACHE_DIR"
-# Limpieza explícita de node_modules antes de instalar.
-sudo -u "$APP_USER" rm -rf node_modules
-sudo -u "$APP_USER" npm ci --cache "$NPM_CACHE_DIR" --legacy-peer-deps
+# ── 2. Copiar fuentes + instalar dependencias en tmpfs ────────────────────────
+echo "[2/5] Instalando dependencias (tmpfs)..."
+rm -rf "$BUILD_DIR"
+mkdir -p "$BUILD_DIR" "$NPM_CACHE_DIR"
+chown "${APP_USER}:${APP_USER}" "$BUILD_DIR" "$NPM_CACHE_DIR"
+
+# Copiar fuentes al tmpfs (leer desde disco, escribir en RAM — seguro)
+sudo -u "$APP_USER" rsync -a --exclude=node_modules --exclude=.next --exclude=storage \
+  "$APP_DIR/" "$BUILD_DIR/"
+
+sudo -u "$APP_USER" sh -c "cd '$BUILD_DIR' && npm ci --cache '$NPM_CACHE_DIR' --legacy-peer-deps"
 
 # ── 3. Regenerar cliente Prisma y aplicar migraciones ─────────────────────────
 echo "[3/5] Aplicando migraciones de base de datos..."
-sudo -u "$APP_USER" npx prisma generate
-sudo -u "$APP_USER" npx prisma migrate deploy
+sudo -u "$APP_USER" sh -c "cd '$BUILD_DIR' && npx prisma generate"
+sudo -u "$APP_USER" sh -c "cd '$BUILD_DIR' && npx prisma migrate deploy"
 
-# ── 4. Build de producción ────────────────────────────────────────────────────
+# ── 4. Build de producción en tmpfs ──────────────────────────────────────────
 echo "[4/5] Construyendo la aplicación..."
-sudo -u "$APP_USER" npm run build
+sudo -u "$APP_USER" sh -c "cd '$BUILD_DIR' && npm run build"
 
-# Copiar archivos estáticos al directorio standalone.
-# Se preservan las imágenes subidas por usuarios (public/uploads) moviéndolas
-# antes de borrar y restaurándolas después: mv es un rename dentro del mismo
-# filesystem, por lo que es instantáneo y no desencadena I/O pesado.
+# Copiar estáticos dentro del standalone (todo en tmpfs, sin tocar disco aún)
+sudo -u "$APP_USER" rm -rf "$BUILD_DIR/.next/standalone/.next/static" \
+                            "$BUILD_DIR/.next/standalone/public"
+sudo -u "$APP_USER" cp -r "$BUILD_DIR/.next/static"  "$BUILD_DIR/.next/standalone/.next/static"
+sudo -u "$APP_USER" cp -r "$BUILD_DIR/public"         "$BUILD_DIR/.next/standalone/public"
+
+# Preservar uploads subidos por usuarios antes de reemplazar .next en disco
 UPLOADS_SAVE="${APP_DIR}/.uploads_save_$$"
 UPLOADS_SRC="${APP_DIR}/.next/standalone/public/uploads"
 if [ -d "$UPLOADS_SRC" ]; then
   sudo -u "$APP_USER" mv "$UPLOADS_SRC" "$UPLOADS_SAVE"
 fi
 
-sudo -u "$APP_USER" rm -rf .next/standalone/.next/static .next/standalone/public
-sudo -u "$APP_USER" cp -r .next/static .next/standalone/.next/static
-sudo -u "$APP_USER" cp -r public .next/standalone/public
+# Reemplazar .next en disco con el resultado del build (mínimo I/O al disco)
+sudo -u "$APP_USER" rm -rf "$APP_DIR/.next"
+sudo -u "$APP_USER" cp -r  "$BUILD_DIR/.next" "$APP_DIR/.next"
 
+# Restaurar uploads
 if [ -d "$UPLOADS_SAVE" ]; then
-  sudo -u "$APP_USER" mv "$UPLOADS_SAVE" "${APP_DIR}/.next/standalone/public/uploads"
+  sudo -u "$APP_USER" mv "$UPLOADS_SAVE" "$UPLOADS_SRC"
 fi
+
+# Limpiar build de tmpfs
+rm -rf "$BUILD_DIR"
 
 # ── 5. Reiniciar servicio ─────────────────────────────────────────────────────
 echo "[5/5] Reiniciando servicio..."
