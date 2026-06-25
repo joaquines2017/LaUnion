@@ -32,6 +32,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // TypeScript se verifica localmente con tsc --noEmit antes de cada commit.
+  // Saltarlo en el build del servidor ahorra ~700 MB de RAM (crítico en CT con 2 GiB).
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   async rewrites() {
     return [
       // Redirige URLs legacy /uploads/... al route handler /api/uploads/...
