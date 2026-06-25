@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # install.sh — Instalador de LaUnion para nueva instancia de cliente
-# Versión: 1.0 — 2026-06-24
+# Versión: 2.0 — 2026-06-25
 #
 # Uso: sudo bash install.sh
 # Requisitos: Ubuntu 24.04 LTS limpio, ejecutar como root
@@ -11,11 +11,14 @@
 #   2. Crea el usuario de sistema 'launion'
 #   3. Instala Node.js 20 via nvm
 #   4. Clona el repositorio
-#   5. Crea el archivo .env con la configuración del cliente
+#   5. Crea el archivo .env con la configuración del servidor
 #   6. Configura PostgreSQL local (opcional) o usa DB remota
 #   7. Instala dependencias y construye la app en tmpfs
 #   8. Crea el servicio systemd
 #   9. Configura nginx con SSL autofirmado y fail2ban
+#
+# Al terminar: abrir el navegador en https://<IP> para completar
+# la configuración de la empresa mediante el wizard de primer arranque.
 # =============================================================================
 set -euo pipefail
 
@@ -40,7 +43,7 @@ TOTAL_STEPS=9
 # ── Banner ─────────────────────────────────────────────────────────────────────
 echo -e "${BOLD}"
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║      LaUnion — Instalador  v1.0  (2026-06-24)       ║"
+echo "║      LaUnion — Instalador  v2.0  (2026-06-25)       ║"
 echo "║      Sistema de Costeo para Carpintería              ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo -e "${NC}"
@@ -52,30 +55,11 @@ echo -e "${NC}"
 command -v curl &>/dev/null || apt-get install -y -qq curl
 
 # ── Recolección de configuración ───────────────────────────────────────────────
-echo -e "${BOLD}── Datos de la empresa ──────────────────────────────────${NC}\n"
-
-read -rp "  Nombre de la empresa: " EMPRESA_NOMBRE
-[[ -n "${EMPRESA_NOMBRE:-}" ]] || fatal "El nombre de la empresa es requerido"
+echo -e "${BOLD}── Configuración del servidor ───────────────────────────${NC}\n"
 
 SERVER_IP=$(hostname -I | awk '{print $1}')
 read -rp "  IP o dominio del servidor [$SERVER_IP]: " SERVER_HOST
 SERVER_HOST="${SERVER_HOST:-$SERVER_IP}"
-
-echo ""
-echo -e "${BOLD}── Usuario administrador ────────────────────────────────${NC}\n"
-
-read -rp "  Nombre de usuario: " ADMIN_NOMBRE
-[[ -n "${ADMIN_NOMBRE:-}" ]] || fatal "El nombre de usuario es requerido"
-
-read -rp "  Email: " ADMIN_EMAIL
-[[ -n "${ADMIN_EMAIL:-}" ]] || fatal "El email es requerido"
-
-while true; do
-  read -rsp "  Contraseña del admin (mín. 8 caracteres): " ADMIN_PASSWORD
-  echo ""
-  [[ ${#ADMIN_PASSWORD} -ge 8 ]] && break
-  warn "La contraseña debe tener al menos 8 caracteres"
-done
 
 echo ""
 echo -e "${BOLD}── Base de datos ────────────────────────────────────────${NC}\n"
@@ -109,10 +93,11 @@ DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME
 # ── Confirmación ───────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}── Resumen de instalación ───────────────────────────────${NC}\n"
-echo "  Empresa:    $EMPRESA_NOMBRE"
 echo "  Servidor:   https://$SERVER_HOST"
-echo "  Admin:      $ADMIN_EMAIL ($ADMIN_NOMBRE)"
 echo "  Base datos: $DB_HOST:$DB_PORT/$DB_NAME (usuario: $DB_USER)"
+echo ""
+echo -e "  ${YELLOW}La empresa y el usuario administrador se configuran al${NC}"
+echo -e "  ${YELLOW}abrir el navegador en https://$SERVER_HOST (wizard /setup).${NC}"
 echo ""
 read -rp "  ¿Confirmar instalación? [s/N]: " CONFIRM
 [[ "${CONFIRM:-}" =~ ^[sS]$ ]] || { echo "Instalación cancelada."; exit 0; }
@@ -186,11 +171,9 @@ if [[ "$DB_HOST" == "localhost" || "$DB_HOST" == "127.0.0.1" ]]; then
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql
   systemctl enable postgresql
   systemctl start postgresql
-  # Crear usuario DB si no existe
   sudo -u postgres psql -tc "SELECT 1 FROM pg_user WHERE usename='${DB_USER}'" \
     | grep -q 1 \
     || sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';"
-  # Crear base de datos si no existe
   sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" \
     | grep -q 1 \
     || sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"
@@ -236,17 +219,11 @@ su - "$APP_USER" -c "
 "
 ok "Migraciones aplicadas"
 
-info "Cargando datos iniciales..."
-# Usamos un script temporal para pasar las variables con seguridad
+info "Creando superadmin de sistema..."
 SEED_RUNNER=$(mktemp /tmp/launion-seed-XXXX.sh)
 cat > "$SEED_RUNNER" <<SEEDRUNNER
 #!/usr/bin/env bash
 export NVM_DIR="\$HOME/.nvm" && source "\$NVM_DIR/nvm.sh"
-export INSTALL_EMPRESA_NOMBRE="${EMPRESA_NOMBRE}"
-export INSTALL_EMPRESA_DOMINIO="${SERVER_HOST}"
-export INSTALL_ADMIN_NOMBRE="${ADMIN_NOMBRE}"
-export INSTALL_ADMIN_EMAIL="${ADMIN_EMAIL}"
-export INSTALL_ADMIN_PASSWORD="${ADMIN_PASSWORD}"
 export INSTALL_SUPERADMIN_PASSWORD="${SUPERADMIN_PASSWORD}"
 cd "${BUILD_DIR}"
 node scripts/seed-install.mjs
@@ -255,7 +232,7 @@ chmod +x "$SEED_RUNNER"
 chown "$APP_USER:$APP_USER" "$SEED_RUNNER"
 su - "$APP_USER" -c "bash '$SEED_RUNNER'"
 rm -f "$SEED_RUNNER"
-ok "Datos iniciales cargados"
+ok "Superadmin creado"
 
 info "Construyendo aplicación Next.js..."
 su - "$APP_USER" -c "
@@ -384,18 +361,18 @@ echo -e "${BOLD}${GREEN}"
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║               ✓  Instalación completada                      ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
-printf "║  Empresa     : %-47s║\n" "$EMPRESA_NOMBRE"
-printf "║  URL         : %-47s║\n" "https://$SERVER_HOST"
+printf "║  URL del sistema : %-43s║\n" "https://$SERVER_HOST"
 echo "╠══════════════════════════════════════════════════════════════╣"
-echo "║  ACCESO ADMINISTRADOR                                        ║"
-printf "║  Email       : %-47s║\n" "$ADMIN_EMAIL"
-printf "║  Contraseña  : %-47s║\n" "$ADMIN_PASSWORD"
+echo "║  PRÓXIMO PASO                                                ║"
+echo "║  Abrir el navegador en la URL del sistema.                   ║"
+echo "║  El wizard de configuración se abrirá automáticamente        ║"
+echo "║  para ingresar: nombre de la empresa, logo y usuario admin.  ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
 echo "║  SUPERADMIN (uso interno — no compartir con el cliente)      ║"
 printf "║  Email       : %-47s║\n" "superadmin@sistema.local"
 printf "║  Contraseña  : %-47s║\n" "$SUPERADMIN_PASSWORD"
 echo "╠══════════════════════════════════════════════════════════════╣"
-echo "║  ► Guardá estas credenciales en un lugar seguro              ║"
+echo "║  ► Guardá la contraseña del superadmin en un lugar seguro    ║"
 echo "║  ► El navegador mostrará advertencia SSL (cert autofirmado)  ║"
 echo "║  ► Aceptar la excepción una sola vez para continuar          ║"
 echo "╚══════════════════════════════════════════════════════════════╝"

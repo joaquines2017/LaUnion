@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
+const CATEGORIAS_INSUMO = [
+  { nombre: "Melamina",          descripcion: "Placas de melamina en distintos colores y espesores" },
+  { nombre: "MDF",               descripcion: "Placas de MDF crudo o melamínico" },
+  { nombre: "Fibrofácil",        descripcion: "Placas de fibrocemento para fondos" },
+  { nombre: "Aglomerado",        descripcion: "Placas de aglomerado de madera" },
+  { nombre: "Ranurado",          descripcion: "Placas ranuradas para estanterías" },
+  { nombre: "Bisagras",          descripcion: "Bisagras de distintos tipos y ángulos" },
+  { nombre: "Correderas",        descripcion: "Rieles y correderas para cajones" },
+  { nombre: "Tornillería",       descripcion: "Tornillos y fijaciones" },
+  { nombre: "Cerraduras",        descripcion: "Cerraduras para cajones y vitrinas" },
+  { nombre: "Tiradores",         descripcion: "Tiradores y manijas" },
+  { nombre: "Vidrios y Espejos", descripcion: "Vidrios float y espejos varios" },
+  { nombre: "Patas y Ruedas",    descripcion: "Patas y ruedas para muebles" },
+  { nombre: "Iluminación",       descripcion: "Componentes eléctricos para muebles" },
+  { nombre: "Kits",              descripcion: "Kits pre-armados para placards y corredizas" },
+  { nombre: "Tapa Canto",        descripcion: "Cintas de borde para melamina" },
+  { nombre: "Placas Especiales", descripcion: "Placas con tratamientos especiales" },
+  { nombre: "Accesorios",        descripcion: "Escuadras, molduras, silicona y varios" },
+];
+
+const CATEGORIAS_MUEBLE = [
+  "Placard", "Biblioteca", "Cajonera", "Mostrador",
+  "Mesa", "Estante", "Vitrina", "Aparador",
+  "Botinero", "Espejo", "Otro",
+];
+
 export async function POST(req: NextRequest) {
   const count = await prisma.empresa.count();
   if (count > 0) {
@@ -48,6 +74,14 @@ export async function POST(req: NextRequest) {
         estado: "activo",
         empresaId: empresa.id,
       },
+    });
+
+    await tx.categoriaInsumo.createMany({
+      data: CATEGORIAS_INSUMO.map((c) => ({ ...c, empresaId: empresa.id })),
+    });
+
+    await tx.categoriaMueble.createMany({
+      data: CATEGORIAS_MUEBLE.map((nombre) => ({ nombre, empresaId: empresa.id })),
     });
   });
 
