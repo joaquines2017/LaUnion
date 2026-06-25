@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/layout/Sidebar";
 
 export default async function DashboardLayout({
@@ -7,6 +8,9 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const count = await prisma.empresa.count();
+  if (count === 0) redirect("/setup");
+
   const session = await auth();
   if (!session) redirect("/login");
 
