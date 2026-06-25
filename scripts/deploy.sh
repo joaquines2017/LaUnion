@@ -14,6 +14,10 @@ APP_USER="launion"
 BUILD_DIR="/run/launion-build"
 NPM_CACHE_DIR="/run/npm-cache-${APP_USER}"
 
+# Detectar node/npm desde nvm del usuario de la app (no disponible en PATH de root)
+NVM_INIT='export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"'
+RUN_AS="sudo -u $APP_USER bash -c"
+
 echo "=== LaUnion — Deploy ==="
 echo "  Directorio: $APP_DIR"
 echo "  Build:      $BUILD_DIR (tmpfs)"
@@ -37,16 +41,16 @@ chown "${APP_USER}:${APP_USER}" "$BUILD_DIR" "$NPM_CACHE_DIR"
 sudo -u "$APP_USER" rsync -a --exclude=node_modules --exclude=.next --exclude=storage \
   "$APP_DIR/" "$BUILD_DIR/"
 
-sudo -u "$APP_USER" sh -c "cd '$BUILD_DIR' && npm ci --cache '$NPM_CACHE_DIR' --legacy-peer-deps"
+$RUN_AS "$NVM_INIT && cd '$BUILD_DIR' && npm ci --cache '$NPM_CACHE_DIR' --legacy-peer-deps"
 
 # ── 3. Regenerar cliente Prisma y aplicar migraciones ─────────────────────────
 echo "[3/5] Aplicando migraciones de base de datos..."
-sudo -u "$APP_USER" sh -c "cd '$BUILD_DIR' && npx prisma generate"
-sudo -u "$APP_USER" sh -c "cd '$BUILD_DIR' && npx prisma migrate deploy"
+$RUN_AS "$NVM_INIT && cd '$BUILD_DIR' && ./node_modules/.bin/prisma generate"
+$RUN_AS "$NVM_INIT && cd '$BUILD_DIR' && ./node_modules/.bin/prisma migrate deploy"
 
 # ── 4. Build de producción en tmpfs ──────────────────────────────────────────
 echo "[4/5] Construyendo la aplicación..."
-sudo -u "$APP_USER" sh -c "cd '$BUILD_DIR' && npm run build"
+$RUN_AS "$NVM_INIT && cd '$BUILD_DIR' && npm run build"
 
 # Copiar estáticos dentro del standalone (todo en tmpfs, sin tocar disco aún)
 sudo -u "$APP_USER" rm -rf "$BUILD_DIR/.next/standalone/.next/static" \
